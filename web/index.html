@@ -95,7 +95,7 @@
           <b>La cámara no funciona acá.</b> Tocá los <b>···</b> arriba y elegí
           <b id="inappHow">“Abrir en el navegador”</b>.
         </div>
-        <div id="introArt" style="font-size:38px">🌸 ⭐ ❤️</div>
+        <div id="introArt" style="font-size:38px">⭕ 🌀 🌸</div>
         <p class="social hidden" id="social"></p>
         <input id="nick" maxlength="14" placeholder="Tu nombre o nick" autocomplete="off">
         <button id="btnPlay">Jugar</button>
@@ -270,10 +270,10 @@ video.playsInline = true; video.muted = true; video.autoplay = true;
 const up = (lm, t, p) => lm[t].y < lm[p].y - 0.015;
 const BONES = [[0,5],[5,8],[0,9],[9,12],[0,13],[13,16],[0,17],[17,20],[0,1],[1,4]];
 
-const GHOSTS = new Map(SHAPES.map(s => [s.id, normalize(resample(s.pts, 180, s.closed))]));
+const GHOSTS = new Map(SHAPES.map(s => [s.id, normalize(resample(s.pts, 200, s.closed))]));
 
 function drawGhost(shape) {
-  const p = GHOSTS.get(shape.id), R = H * 0.30;
+  const p = GHOSTS.get(shape.id), R = H * 0.26;
   ctx.strokeStyle = "rgba(96,165,250,.30)";
   ctx.lineWidth = 3; ctx.setLineDash([9, 7]);
   ctx.lineJoin = ctx.lineCap = "round";

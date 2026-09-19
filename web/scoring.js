@@ -38,20 +38,23 @@ function star5() {
   return [0, 2, 4, 1, 3].map(i => v[i]);
 }
 
+/* Las figuras van de fácil a difícil. Criterio: que se puedan dibujar de un
+   trazo, en el aire y sin perder la cuenta. La estrella (5 líneas que se
+   cruzan) y la flor de 5 pétalos (dos vueltas completas) quedaron afuera:
+   son dibujables con un mouse, no con el dedo en el aire. */
 export const SHAPES = [
   { id: "circulo",   name: "Círculo",   emoji: "⭕",
     pts: gen(t => ({ x: Math.cos(t), y: Math.sin(t) }), 96, 0, TAU), closed: true },
   { id: "triangulo", name: "Triángulo", emoji: "🔺", pts: poly(3, -Math.PI / 2), closed: true },
-  { id: "estrella",  name: "Estrella",  emoji: "⭐", pts: star5(), closed: true },
-  { id: "corazon",   name: "Corazón",   emoji: "❤️",
-    pts: gen(t => ({
-      x: 16 * Math.pow(Math.sin(t), 3),
-      y: -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t))
-    }), 140, 0, TAU), closed: true },
-  // Curva rosa: r = cos(2.5·θ) sobre [0, 4π] da exactamente 5 pétalos.
+  { id: "cuadrado",  name: "Cuadrado",  emoji: "⬜", pts: poly(4, -Math.PI / 4), closed: true },
+  // Espiral: figura abierta, sale natural con el brazo.
+  { id: "espiral",   name: "Espiral",   emoji: "🌀",
+    pts: gen(t => { const r = t / (3 * Math.PI); return { x: r * Math.cos(t), y: r * Math.sin(t) }; },
+             160, 0.6, 3 * Math.PI), closed: false },
+  // Curva rosa con 4 pétalos: r = cos(2·θ). Una sola vuelta, no dos.
   { id: "flor",      name: "Flor",      emoji: "🌸",
-    pts: gen(t => { const r = Math.cos(2.5 * t); return { x: r * Math.cos(t), y: r * Math.sin(t) }; },
-             220, 0, 4 * Math.PI), closed: true },
+    pts: gen(t => { const r = Math.cos(2 * t); return { x: r * Math.cos(t), y: r * Math.sin(t) }; },
+             180, 0, TAU), closed: true },
 ];
 
 export const MAX_SCORE = SHAPES.length * 100;
@@ -97,34 +100,68 @@ export function normalize(pts) {
   return pts.map(p => ({ x: (p.x - cx) / s, y: (p.y - cy) / s }));
 }
 
-/** Distancia media probando todos los inicios (figura cerrada) y ambos sentidos. */
-export function meanDistance(A, B, closed) {
+/** Ángulo de giro en cada punto: la "firma de esquinas" de la figura.
+    Un círculo da valores chicos y uniformes; un triángulo, tres picos grandes.
+    Esto es lo que impide que un círculo puntúe alto como triángulo. */
+const K = 4;   // ventana: mide el giro entre puntos separados, no adyacentes.
+               // Con K=1 el temblor de la mano domina la señal; con K=4 se
+               // suaviza el ruido y las esquinas reales se siguen viendo.
+export function turning(pts, closed = true) {
+  const n = pts.length, out = new Array(n);
+  for (let i = 0; i < n; i++) {
+    if (!closed && (i < K || i >= n - K)) { out[i] = 0; continue; }
+    const a = pts[(i - K + n) % n], b = pts[i], c = pts[(i + K) % n];
+    let d = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x);
+    while (d > Math.PI) d -= TAU;
+    while (d < -Math.PI) d += TAU;
+    out[i] = d;
+  }
+  return out;
+}
+
+const TURN_W = 0.55;   // cuánto pesa la curvatura frente a la posición
+
+/** Distancia combinada (posición + curvatura), probando todos los puntos de
+    inicio si la figura es cerrada, y ambos sentidos de giro. */
+export function meanDistance(A, B, closed, TA, TB) {
   const n = A.length;
   const shifts = closed ? n : 1;
+  TA = TA || turning(A);
+  TB = TB || turning(B);
   let best = Infinity;
   for (let dir = 0; dir < 2; dir++) {
     for (let s = 0; s < shifts; s++) {
-      let sum = 0;
+      let pos = 0, turn = 0;
       for (let i = 0; i < n; i++) {
         const j = dir === 0 ? (i + s) % n : (((s - i) % n) + n) % n;
-        sum += (A[i].x - B[j].x) ** 2 + (A[i].y - B[j].y) ** 2;
+        pos += (A[i].x - B[j].x) ** 2 + (A[i].y - B[j].y) ** 2;
+        // Al invertir el sentido, los ángulos de giro cambian de signo.
+        const tb = dir === 0 ? TB[j] : -TB[j];
+        turn += (TA[i] - tb) ** 2;
       }
-      if (sum < best) best = sum;
+      const d = Math.sqrt(pos / n) + TURN_W * Math.sqrt(turn / n);
+      if (d < best) best = d;
     }
   }
-  return Math.sqrt(best / n);
+  return best;
 }
 
-const TEMPLATES = new Map(
-  SHAPES.map(s => [s.id, normalize(resample(s.pts, N, s.closed))])
-);
+const TEMPLATES = new Map(SHAPES.map(s => {
+  const pts = normalize(resample(s.pts, N, s.closed));
+  return [s.id, { pts, turn: turning(pts, s.closed), closed: s.closed }];
+}));
+
+/* Curva de puntaje, calibrada contra trazos simulados con distorsión de mano:
+   d≈0.30 (buen pulso) → ~90 · d≈0.45 → ~72 · d≈0.70 → ~44 · d≈1.0 → ~11 */
+const D_PERFECT = 0.20;
+const D_ZERO = 1.10;
 
 /** Puntaje 0-100 de un trazo YA normalizado (N puntos) contra una figura. */
 export function scoreNormalized(A, shapeId) {
-  const B = TEMPLATES.get(shapeId);
-  if (!B || !Array.isArray(A) || A.length !== N) return null;
-  const d = meanDistance(A, B, true);
-  return Math.round(100 * clamp(1 - (d - 0.12) / 0.62, 0, 1));
+  const tpl = TEMPLATES.get(shapeId);
+  if (!tpl || !Array.isArray(A) || A.length !== N) return null;
+  const d = meanDistance(A, tpl.pts, tpl.closed, turning(A, tpl.closed), tpl.turn);
+  return Math.round(100 * clamp(1 - (d - D_PERFECT) / (D_ZERO - D_PERFECT), 0, 1));
 }
 
 /** Puntaje de un trazo crudo en píxeles. Devuelve {score, normalized} o null. */
@@ -132,7 +169,7 @@ export function scoreStroke(stroke, shape) {
   if (stroke.length < 18) return null;
   let len = 0;
   for (let i = 1; i < stroke.length; i++) len += dist(stroke[i - 1], stroke[i]);
-  if (len < 220) return null;                    // trazo demasiado corto
+  if (len < 170) return null;                    // trazo demasiado corto
   const r = resample(stroke, N, shape.closed);
   if (!r) return null;
   const A = normalize(r);

@@ -17,7 +17,7 @@ Funciona desde el celular (Android e iOS) y desde la computadora. No hay que ins
 
 Cinco figuras, siempre las mismas y en el mismo orden (para que los puntajes sean comparables):
 
-⭕ Círculo → 🔺 Triángulo → ⭐ Estrella → ❤️ Corazón → 🌸 Flor
+⭕ Círculo → 🔺 Triángulo → ⬜ Cuadrado → 🌀 Espiral → 🌸 Flor
 
 La figura objetivo aparece punteada en pantalla como guía. Dibujas encima, cierras el trazo, y te puntúa.
 
@@ -51,7 +51,9 @@ cámara → MediaPipe Hands → 21 landmarks de la mano
 
 **2. Histéresis en los gestos.** Un gesto tiene que mantenerse 3 frames seguidos antes de activarse. Sin esto, la detección parpadea entre "dibujar" y "terminar" y te corta el trazo a la mitad.
 
-**3. Puntaje sin machine learning.** Las figuras son curvas paramétricas — la flor es una *curva rosa*, `r = cos(2.5·θ)`, que da exactamente 5 pétalos. Para comparar se usa un enfoque tipo [$1 Unistroke Recognizer](https://depts.washington.edu/acelab/proj/dollar/index.html): se remuestrean ambos trazos a 64 puntos equidistantes, se normalizan a centroide y escala común, y se mide la distancia media punto a punto probando todos los puntos de inicio y ambos sentidos de giro. Resultado determinista, sin dataset, sin entrenamiento.
+**3. Puntaje sin machine learning.** Las figuras son curvas paramétricas — la flor es una *curva rosa*, `r = cos(2·θ)`, que da exactamente 4 pétalos. Para comparar se usa un enfoque tipo [$1 Unistroke Recognizer](https://depts.washington.edu/acelab/proj/dollar/index.html): se remuestrean ambos trazos a 64 puntos equidistantes, se normalizan a centroide y escala común, y se mide la distancia media punto a punto probando todos los puntos de inicio y ambos sentidos de giro.
+
+A eso se le suma un **término de curvatura**: el ángulo de giro en cada punto, medido sobre una ventana de ±4 puntos para que el temblor de la mano no domine la señal. Un círculo da giros chicos y uniformes; un triángulo, tres picos grandes. Sin esto, un círculo puntuaba 77 sobre 100 como "triángulo". Resultado determinista, sin dataset, sin entrenamiento.
 
 ---
 

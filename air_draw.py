@@ -6,7 +6,8 @@ punta del índice, suaviza el trazo con un One-Euro Filter y lo compara contra
 una plantilla geométrica para darte un puntaje de 0 a 100.
 
 No hay ningún modelo entrenado para puntuar: la flor es una curva rosa
-(r = cos(2.5·θ)) y la comparación es geometría pura (algoritmo tipo $1 Recognizer).
+(r = cos(2·θ)) y la comparación es geometría pura (algoritmo tipo $1 Recognizer,
+más un término de curvatura que distingue esquinas de curvas suaves).
 
 Uso:  python air_draw.py
 Gestos:  ☝️ índice = dibujar · ✌️ índice+medio = cerrar trazo · 🖐️ palma = reintentar
@@ -69,13 +70,13 @@ def star5() -> np.ndarray:
     return np.array([v[i] for i in (0, 2, 4, 1, 3)])
 
 
-def heart(t: float) -> tuple:
-    return (16 * math.sin(t) ** 3,
-            -(13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)))
+def spiral(t: float) -> tuple:
+    r = t / (3 * math.pi)
+    return (r * math.cos(t), r * math.sin(t))
 
 
 def flower(t: float) -> tuple:
-    r = math.cos(2.5 * t)          # curva rosa: 5 pétalos exactos sobre [0, 4π]
+    r = math.cos(2 * t)            # curva rosa: 4 pétalos en una sola vuelta
     return (r * math.cos(t), r * math.sin(t))
 
 
@@ -86,15 +87,22 @@ class Shape:
     closed: bool = True
 
 
+# De fácil a difícil. Criterio: que se pueda dibujar de un trazo, en el aire y
+# sin perder la cuenta. La estrella (5 líneas cruzadas) y la flor de 5 pétalos
+# (dos vueltas completas) quedaron afuera: se dibujan con mouse, no con el dedo.
 SHAPES = [
     Shape("Circulo",   gen(lambda t: (math.cos(t), math.sin(t)), 96, 0, TAU)),
     Shape("Triangulo", poly(3, -math.pi / 2)),
-    Shape("Estrella",  star5()),
-    Shape("Corazon",   gen(heart, 140, 0, TAU)),
-    Shape("Flor",      gen(flower, 220, 0, 4 * math.pi)),
+    Shape("Cuadrado",  poly(4, -math.pi / 4)),
+    Shape("Espiral",   gen(spiral, 160, 0.6, 3 * math.pi), closed=False),
+    Shape("Flor",      gen(flower, 180, 0, TAU)),
 ]
 
-N = 64  # puntos tras remuestrear
+N = 64   # puntos tras remuestrear
+K = 4    # ventana para medir el giro (con K=1 domina el temblor de la mano)
+TURN_W = 0.55      # cuánto pesa la curvatura frente a la posición
+D_PERFECT = 0.20   # distancia que vale 100 puntos
+D_ZERO = 1.10      # distancia que vale 0
 
 
 # ========================== COMPARACIÓN DE TRAZOS ==========================
@@ -121,19 +129,53 @@ def normalize(pts: np.ndarray) -> np.ndarray:
     return d / scale
 
 
-def mean_distance(a: np.ndarray, b: np.ndarray, closed: bool) -> float:
-    """Prueba todos los puntos de inicio (si la figura es cerrada) y ambos sentidos."""
+def turning(pts: np.ndarray, closed: bool = True) -> np.ndarray:
+    """Ángulo de giro en cada punto: la 'firma de esquinas' de la figura.
+
+    Un círculo da valores chicos y uniformes; un triángulo, tres picos grandes.
+    Esto es lo que impide que un círculo puntúe alto como triángulo.
+    """
+    n = len(pts)
+    idx = np.arange(n)
+    a, b, c = pts[(idx - K) % n], pts, pts[(idx + K) % n]
+    d = np.arctan2(c[:, 1] - b[:, 1], c[:, 0] - b[:, 0]) - \
+        np.arctan2(b[:, 1] - a[:, 1], b[:, 0] - a[:, 0])
+    d = (d + math.pi) % TAU - math.pi          # normalizar a [-π, π)
+    if not closed:
+        d[:K] = 0.0
+        d[-K:] = 0.0
+    return d
+
+
+def mean_distance(a: np.ndarray, b: np.ndarray, closed: bool,
+                  ta: np.ndarray = None, tb: np.ndarray = None) -> float:
+    """Distancia combinada (posición + curvatura).
+
+    Prueba todos los puntos de inicio si la figura es cerrada, y ambos sentidos.
+    """
     n = len(a)
+    ta = turning(a, closed) if ta is None else ta
+    tb = turning(b, closed) if tb is None else tb
     shifts = range(n) if closed else range(1)
     best = math.inf
     idx = np.arange(n)
     for reverse in (False, True):
         for s in shifts:
             j = (s - idx) % n if reverse else (idx + s) % n
-            err = float(((a - b[j]) ** 2).sum())
-            if err < best:
-                best = err
-    return math.sqrt(best / n)
+            # Al invertir el sentido, los ángulos de giro cambian de signo.
+            tbj = -tb[j] if reverse else tb[j]
+            d = (math.sqrt(float(((a - b[j]) ** 2).sum()) / n)
+                 + TURN_W * math.sqrt(float(((ta - tbj) ** 2).sum()) / n))
+            if d < best:
+                best = d
+    return best
+
+
+# Plantillas ya remuestreadas y normalizadas (se calculan una sola vez).
+TEMPLATES = {}
+for _s in SHAPES:
+    _p = normalize(resample(_s.pts, N, _s.closed))
+    TEMPLATES[_s.name] = (_p, turning(_p, _s.closed))
 
 
 def score_stroke(stroke: List[tuple], shape: Shape) -> Optional[int]:
@@ -141,13 +183,15 @@ def score_stroke(stroke: List[tuple], shape: Shape) -> Optional[int]:
         return None
     pts = np.array(stroke, dtype=np.float64)
     length = float(np.linalg.norm(np.diff(pts, axis=0), axis=1).sum())
-    if length < 300:                       # trazo demasiado corto para contar
+    if length < 230:                       # trazo demasiado corto para contar
         return None
     a = resample(pts, N, shape.closed)
     if a is None:
         return None
-    d = mean_distance(normalize(a), normalize(resample(shape.pts, N, shape.closed)), shape.closed)
-    return int(round(100 * max(0.0, min(1.0, 1 - (d - 0.12) / 0.62))))
+    A = normalize(a)
+    B, tb = TEMPLATES[shape.name]
+    d = mean_distance(A, B, shape.closed, turning(A, shape.closed), tb)
+    return int(round(100 * max(0.0, min(1.0, 1 - (d - D_PERFECT) / (D_ZERO - D_PERFECT)))))
 
 
 # ============================== ONE-EURO FILTER ==============================
@@ -222,8 +266,8 @@ def finger_up(lm, tip: int, pip: int) -> bool:
 
 def draw_ghost(img, shape: Shape):
     """Figura objetivo punteada, como guía."""
-    p = normalize(resample(shape.pts, 180, shape.closed))
-    r = H * 0.30
+    p = normalize(resample(shape.pts, 200, shape.closed))
+    r = H * 0.26
     pts = np.stack([W / 2 + p[:, 0] * r, H / 2 + p[:, 1] * r], axis=1).astype(np.int32)
     for i in range(0, len(pts) - 1, 2):           # saltear puntos = línea punteada
         cv2.line(img, tuple(pts[i]), tuple(pts[i + 1]), (110, 80, 55), 3, cv2.LINE_AA)
