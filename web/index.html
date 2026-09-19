@@ -43,6 +43,19 @@
   button:disabled{opacity:.45;cursor:default}
   .lock{color:var(--muted);font-size:12px;max-width:320px;margin:0}
   .big{font-size:52px;font-weight:800;color:var(--green);line-height:1}
+  .warn{
+    background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.35);
+    color:var(--gold);border-radius:9px;padding:11px 13px;font-size:13px;
+    line-height:1.45;max-width:330px;
+  }
+  .warn.hidden{display:none}
+  .social{
+    color:var(--fg);font-size:13px;margin:0;background:#0b1017;
+    border:1px solid var(--line);border-radius:9px;padding:8px 13px;
+  }
+  .social.hidden{display:none}
+  .social b{color:var(--green)}
+  .social .lead{color:var(--muted);font-size:11.5px;display:block;margin-top:3px}
 
   #hud{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 13px;min-width:92px;text-align:center}
@@ -77,7 +90,13 @@
       <canvas id="cv" width="640" height="480"></canvas>
 
       <div class="screen" id="scIntro">
-        <div style="font-size:38px">🌸 ⭐ ❤️</div>
+        <div id="inapp" class="warn hidden">
+          ⚠️ Estás en el navegador interno de la app.<br>
+          <b>La cámara no funciona acá.</b> Tocá los <b>···</b> arriba y elegí
+          <b id="inappHow">“Abrir en el navegador”</b>.
+        </div>
+        <div id="introArt" style="font-size:38px">🌸 ⭐ ❤️</div>
+        <p class="social hidden" id="social"></p>
         <input id="nick" maxlength="14" placeholder="Tu nombre o nick" autocomplete="off">
         <button id="btnPlay">Jugar</button>
         <p class="lock">🔒 Tu cámara se procesa <b>dentro de tu navegador</b>. Ningún frame sale de tu dispositivo.</p>
@@ -122,8 +141,20 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const cv = $("cv"), ctx = cv.getContext("2d");
 const W = cv.width, H = cv.height;
 
-const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const UA = navigator.userAgent;
+const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(UA);
+const isIOS = /iPhone|iPad|iPod/i.test(UA) ||
+              (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const DEV = isMobile ? "📱" : "💻";
+
+/* Navegadores internos (LinkedIn, Facebook, Instagram…): getUserMedia suele
+   estar bloqueado ahí. Como el tráfico viene de un post, esto pasa seguido. */
+const IN_APP = /\b(LinkedInApp|FBAN|FBAV|FB_IAB|Instagram|Line\/|Twitter|MicroMessenger|GSA\/)/i.test(UA);
+if (IN_APP) {
+  document.getElementById("inapp").classList.remove("hidden");
+  document.getElementById("inappHow").textContent =
+    isIOS ? "“Abrir en Safari”" : "“Abrir en Chrome”";
+}
 
 /* =================== RANKING (remoto, con respaldo local) =================== */
 const LB_KEY = "airdraw_lb_v2";
@@ -156,6 +187,18 @@ function renderLb(rows, mineIdx = -1) {
   });
 }
 
+/** Prueba social en la pantalla de inicio: es lo primero que se ve en celular,
+    donde el ranking queda más abajo y casi nadie llega a verlo antes de jugar. */
+function renderSocial(count, top) {
+  const el = $("social");
+  if (!count) { el.classList.add("hidden"); return; }
+  const lider = top?.[0] ? `Líder: ${top[0].nick} con ${top[0].total}` : "";
+  el.innerHTML = `🎮 <b>${count}</b> ${count === 1 ? "partida jugada" : "partidas jugadas"}` +
+                 (lider ? `<span class="lead">${lider}</span>` : "");
+  el.classList.remove("hidden");
+  $("introArt").style.fontSize = "30px";
+}
+
 async function loadLb() {
   try {
     const res = await fetch("/api/scores");
@@ -163,6 +206,7 @@ async function loadLb() {
     const data = await res.json();
     remoteOk = true;
     renderLb(data.top || []);
+    renderSocial(data.count, data.top);
   } catch {
     remoteOk = false;                      // sin backend todavía: ranking local
     renderLb(localRead());
@@ -181,6 +225,7 @@ async function submitRun(nick, rounds) {
     remoteOk = true;
     const idx = (data.top || []).findIndex(r => r.nick === nick && r.total === data.total);
     renderLb(data.top || [], idx);
+    renderSocial(data.count, data.top);
     return data;
   } catch {
     remoteOk = false;
@@ -358,24 +403,49 @@ function loop(t) {
 }
 
 /* =============================== ARRANQUE =============================== */
+const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/" +
+                  "hand_landmarker/float16/1/hand_landmarker.task";
+
 async function boot() {
   const st = $("status");
-  st.textContent = "Descargando modelo…";
-  const { HandLandmarker, FilesetResolver } = await import(V);
-  const fileset = await FilesetResolver.forVisionTasks(V + "/wasm");
-  landmarker = await HandLandmarker.createFromOptions(fileset, {
-    baseOptions: {
-      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-      delegate: "GPU"
-    },
-    runningMode: "VIDEO", numHands: 1
-  });
+
+  // 1) La cámara PRIMERO. El permiso aparece enseguida (mejor que tras 5s de
+  //    descarga) y no perdemos el contexto del gesto del usuario, que en iOS
+  //    es obligatorio para getUserMedia.
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Este navegador no da acceso a la cámara. Probá con Chrome o Safari.");
+  }
   st.textContent = "Pidiendo cámara…";
   video.srcObject = await navigator.mediaDevices.getUserMedia({
     video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, audio: false
   });
   await video.play();
+
+  // 2) El modelo. Si el dispositivo no puede con WebGL, cae a CPU.
+  st.textContent = "Descargando modelo…";
+  const { HandLandmarker, FilesetResolver } = await import(V);
+  const fileset = await FilesetResolver.forVisionTasks(V + "/wasm");
+  const make = delegate => HandLandmarker.createFromOptions(fileset, {
+    baseOptions: { modelAssetPath: MODEL_URL, delegate },
+    runningMode: "VIDEO", numHands: 1
+  });
+  try { landmarker = await make("GPU"); }
+  catch { landmarker = await make("CPU"); }
   st.textContent = "";
+}
+
+/** Traduce los errores típicos de cámara a algo que se entienda. */
+function friendlyError(e) {
+  const n = e?.name || "";
+  if (n === "NotAllowedError" || n === "SecurityError")
+    return IN_APP
+      ? "La cámara está bloqueada en el navegador interno. Abrí el link en Safari o Chrome."
+      : "Diste “bloquear” a la cámara. Habilitala en el candado 🔒 de la barra de direcciones y recargá.";
+  if (n === "NotFoundError" || n === "OverconstrainedError")
+    return "No se encontró ninguna cámara en este dispositivo.";
+  if (n === "NotReadableError")
+    return "Otra app está usando la cámara. Cerrala y recargá.";
+  return e?.message || String(e);
 }
 
 function startGame() {
@@ -398,7 +468,7 @@ $("btnPlay").addEventListener("click", async () => {
     requestAnimationFrame(loop);
   } catch (e) {
     $("status").textContent = "";
-    $("err").textContent = "Error: " + (e?.message || e);
+    $("err").textContent = friendlyError(e);
     console.error(e);
   } finally { $("btnPlay").disabled = false; }
 });
