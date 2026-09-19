@@ -255,6 +255,7 @@ class Game:
     flash_score: int = 0
     lock_until: float = 0.0
     done: bool = False
+    thumb_hold: int = 0
 
 
 BONES = [(0, 5), (5, 8), (0, 9), (9, 12), (0, 13), (13, 16), (0, 17), (17, 20), (0, 1), (1, 4)]
@@ -262,6 +263,17 @@ BONES = [(0, 5), (5, 8), (0, 9), (9, 12), (0, 13), (13, 16), (0, 17), (17, 20), 
 
 def finger_up(lm, tip: int, pip: int) -> bool:
     return lm[tip].y < lm[pip].y - 0.015
+
+
+def thumbs_up(lm) -> bool:
+    """👍: los otros cuatro dedos doblados y el pulgar sobre la muñeca.
+
+    Es la pose más robusta para distinguir de las del dibujo: nada en
+    común con ☝️ ni ✌️, y no requiere precisión entre dedos.
+    """
+    otros = (finger_up(lm, 8, 6), finger_up(lm, 12, 10),
+             finger_up(lm, 16, 14), finger_up(lm, 20, 18))
+    return not any(otros) and lm[4].y < lm[0].y - 0.06
 
 
 def draw_ghost(img, shape: Shape):
@@ -362,6 +374,16 @@ def main():
             fx.reset()
             fy.reset()
 
+        # 👍 sostenido ~0.4 s en la pantalla final: jugar de nuevo sin teclado.
+        if res.hand_landmarks and g.done and thumbs_up(res.hand_landmarks[0]):
+            g.thumb_hold += 1
+            if g.thumb_hold >= 12:
+                g = Game(round=1)
+                fx.reset()
+                fy.reset()
+        else:
+            g.thumb_hold = 0
+
         # ---- lógica de la ronda ----
         if not g.done and now >= g.lock_until:
             if g.mode == "draw" and tip:
@@ -407,7 +429,7 @@ def main():
             cv2.rectangle(canvas, (0, H // 2 - 110), (W, H // 2 + 90), PANEL, -1)
             text(canvas, "FINAL", (W // 2, H // 2 - 50), 0.9, MUTED, 2, center=True)
             text(canvas, f"{g.total} / {len(SHAPES) * 100}", (W // 2, H // 2 + 20), 2.4, GREEN, 5, center=True)
-            text(canvas, "R = jugar de nuevo   Q = salir", (W // 2, H // 2 + 65), 0.6, MUTED, 1, center=True)
+            text(canvas, "Pulgar arriba o R = jugar de nuevo   Q = salir", (W // 2, H // 2 + 65), 0.6, MUTED, 1, center=True)
 
         fps_n += 1
         if fps_n >= 15:

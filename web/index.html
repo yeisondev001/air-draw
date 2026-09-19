@@ -130,6 +130,7 @@
         <div class="big" id="finalScore">0</div>
         <p class="lock" id="finalMsg"></p>
         <button id="btnAgain">Jugar de nuevo</button>
+        <p class="lock">… o sostené el pulgar arriba 👍 y arranca solo</p>
       </div>
 
       <div id="hud">
@@ -284,12 +285,16 @@ let landmarker = null, running = false;
 let round = 0, total = 0, nick = "", rounds = [];
 let stroke = [], lastStroke = [], mode = "idle", pending = "idle", hold = 0;
 let flash = 0, flashScore = 0, lockUntil = 0;
+let watchEnd = false, endHold = 0;   // 👍 en la pantalla final
 let fpsT = performance.now(), fpsN = 0;
 
 const video = document.createElement("video");
 video.playsInline = true; video.muted = true; video.autoplay = true;
 
 const up = (lm, t, p) => lm[t].y < lm[p].y - 0.015;
+/** 👍: los otros cuatro dedos doblados y el pulgar claramente por encima de la muñeca. */
+const thumbsUp = lm => !up(lm,8,6) && !up(lm,12,10) && !up(lm,16,14) && !up(lm,20,18)
+  && lm[4].y < lm[0].y - 0.06;
 const BONES = [[0,5],[5,8],[0,9],[9,12],[0,13],[13,16],[0,17],[17,20],[0,1],[1,4]];
 
 const GHOSTS = new Map(SHAPES.map(s => [s.id, normalize(resample(s.pts, 200, s.closed))]));
@@ -342,6 +347,21 @@ async function endGame() {
     : data.kept
       ? `${base} Tu récord con “${nick}” sigue en pie.`
       : `${base} Puesto #${data.rank} de ${MAX_SCORE} posibles.`;
+
+  // Vigilar la cámara mientras dura la pantalla final: 👍 sostenido reinicia.
+  watchEnd = true;
+  requestAnimationFrame(endWatch);
+}
+
+/** Bucle chico para la pantalla final: detecta 👍 sostenido ~0.4 s y reinicia.
+    Corre aparte porque el loop principal se detiene cuando termina el juego. */
+function endWatch(t) {
+  requestAnimationFrame(endWatch);
+  if (!watchEnd || running || !landmarker || video.readyState < 2) return;
+  const res = landmarker.detectForVideo(video, t);
+  if (res.landmarks?.length && thumbsUp(res.landmarks[0])) {
+    if (++endHold >= 10) { watchEnd = false; endHold = 0; startGame(); requestAnimationFrame(loop); }
+  } else endHold = 0;
 }
 
 function loop(t) {
@@ -474,7 +494,7 @@ function friendlyError(e) {
 
 function startGame() {
   round = 0; total = 0; rounds = []; stroke = []; lastStroke = [];
-  flash = 0; lockUntil = 0;
+  flash = 0; lockUntil = 0; watchEnd = false; endHold = 0;
   setCard("cTotal", 0);
   $("scIntro").classList.add("hidden");
   $("scEnd").classList.add("hidden");
