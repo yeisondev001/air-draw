@@ -32,13 +32,13 @@
      que ocupan título, HUD, error y ayuda (~285px). En móvil se permite
      scrollear porque la vista es vertical. */
   @media(min-width:781px){
-    #stage{max-width:min(100%,calc((100vh - 228px)*4/3))}
+    #stage{max-width:min(100%,calc((100vh - 165px)*4/3))}
   }
   canvas{width:100%;height:100%;display:block;border-radius:13px;background:#000;border:1px solid var(--line)}
   .screen{
     position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
     justify-content:center;gap:10px;text-align:center;background:var(--panel);
-    border:1px solid var(--line);border-radius:13px;padding:18px 24px;
+    border:1px solid var(--line);border-radius:13px;padding:18px 24px;z-index:2;
   }
   .screen.hidden{display:none}
   input{
@@ -67,7 +67,19 @@
   .social b{color:var(--green)}
   .social .lead{color:var(--muted);font-size:11.5px;display:block;margin-top:3px}
 
-  #hud{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+  /* HUD estilo juego: flota sobre el canvas y no consume altura de página.
+     En móvil vuelve a su lugar debajo, donde el scroll es natural. */
+  #hud{
+    position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:1;
+    display:flex;gap:8px;justify-content:center;margin-top:0;
+  }
+  #hud .card{background:rgba(19,26,37,.82);padding:5px 11px;min-width:80px}
+  #hud .card b{font-size:16px}
+  @media(max-width:780px){
+    #hud{position:static;transform:none;margin-top:8px}
+    #hud .card{background:var(--panel);padding:8px 13px;min-width:92px}
+    #hud .card b{font-size:19px}
+  }
   .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 13px;min-width:92px;text-align:center}
   .card b{display:block;font-size:19px;font-weight:700;margin-top:1px}
   .k{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.7px}
@@ -119,13 +131,13 @@
         <p class="lock" id="finalMsg"></p>
         <button id="btnAgain">Jugar de nuevo</button>
       </div>
-    </div>
 
-    <div id="hud">
-      <div class="card" id="cRound"><span class="k">Figura</span><b>—</b></div>
-      <div class="card" id="cTotal"><span class="k">Puntos</span><b>0</b></div>
-      <div class="card" id="cMode"><span class="k">Gesto</span><b style="font-size:14px">—</b></div>
-      <div class="card" id="cFps"><span class="k">FPS</span><b>0</b></div>
+      <div id="hud">
+        <div class="card" id="cRound"><span class="k">Figura</span><b>—</b></div>
+        <div class="card" id="cTotal"><span class="k">Puntos</span><b>0</b></div>
+        <div class="card" id="cMode"><span class="k">Gesto</span><b style="font-size:14px">—</b></div>
+        <div class="card" id="cFps"><span class="k">FPS</span><b>0</b></div>
+      </div>
     </div>
     <p id="err"></p>
     <p class="hint">☝️ índice = dibujar · ✌️ índice+medio = cerrar trazo · 🖐️ palma = reintentar</p>
@@ -325,9 +337,11 @@ async function endGame() {
 
   const pct = total / MAX_SCORE;
   const base = pct > .8 ? "¡Excelente!" : pct > .55 ? "Nada mal." : "Aléjate un poco de la cámara y probá de nuevo.";
-  $("finalMsg").textContent = data
-    ? `${base} Puesto #${data.rank} de ${MAX_SCORE} posibles.`
-    : `${base} ${total} de ${MAX_SCORE}.`;
+  $("finalMsg").textContent = !data
+    ? `${base} ${total} de ${MAX_SCORE}.`
+    : data.kept
+      ? `${base} Tu récord con “${nick}” sigue en pie.`
+      : `${base} Puesto #${data.rank} de ${MAX_SCORE} posibles.`;
 }
 
 function loop(t) {
