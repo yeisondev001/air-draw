@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Air Draw — prueba de concepto</title>
+<style>
+  :root{
+    --bg:#0b0f16; --panel:#141b26; --line:#243040;
+    --fg:#e8eef7; --muted:#8fa3bd; --accent:#4ade80; --accent2:#60a5fa; --warn:#fbbf24;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font:15px/1.5 ui-sans-serif,system-ui,"Segoe UI",sans-serif;
+    display:flex; flex-direction:column; align-items:center; gap:14px; padding:16px;
+    min-height:100vh;
+  }
+  h1{font-size:18px;margin:0;font-weight:600;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:13px;margin:0;text-align:center;max-width:640px}
+  #stage{position:relative;width:100%;max-width:640px;aspect-ratio:4/3}
+  canvas{
+    width:100%;height:100%;display:block;border-radius:12px;
+    background:#000;border:1px solid var(--line);
+  }
+  #gate{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:12px;text-align:center;
+    background:var(--panel);border-radius:12px;border:1px solid var(--line);padding:24px;
+  }
+  #gate.hidden{display:none}
+  button{
+    background:var(--accent);color:#06240f;border:0;border-radius:9px;
+    padding:12px 22px;font-size:15px;font-weight:650;cursor:pointer;
+  }
+  button:disabled{opacity:.5;cursor:default}
+  .lock{color:var(--muted);font-size:12.5px;max-width:340px;margin:0}
+  #hud{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;width:100%;max-width:640px}
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:9px 14px;font-size:13px;min-width:112px;text-align:center;
+  }
+  .card b{display:block;font-size:22px;font-weight:700;margin-top:2px}
+  .k{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.7px}
+  #best b{color:var(--accent)} #score b{color:var(--accent2)} #fps b{color:var(--warn)}
+  table{border-collapse:collapse;font-size:13px;max-width:640px;width:100%}
+  td{border-top:1px solid var(--line);padding:6px 8px;color:var(--muted)}
+  td:first-child{color:var(--fg);white-space:nowrap;width:1%}
+  #err{color:#f87171;font-size:13px;max-width:640px;text-align:center;min-height:18px}
+</style>
+</head>
+<body>
+
+<h1>Air Draw — prueba de concepto</h1>
+<p class="sub">Dibuja un círculo en el aire con el dedo índice. Todo se procesa en tu navegador.</p>
+
+<div id="stage">
+  <canvas id="cv" width="640" height="480"></canvas>
+  <div id="gate">
+    <button id="start">Activar cámara</button>
+    <p class="lock">🔒 El video se procesa 100% en tu dispositivo. Ningún frame se envía a ningún servidor.</p>
+    <p class="lock" id="status"></p>
+  </div>
+</div>
+
+<div id="hud">
+  <div class="card" id="score"><span class="k">Último</span><b>—</b></div>
+  <div class="card" id="best"><span class="k">Mejor</span><b>0</b></div>
+  <div class="card" id="mode"><span class="k">Modo</span><b style="font-size:15px">—</b></div>
+  <div class="card" id="fps"><span class="k">FPS</span><b>0</b></div>
+</div>
+
+<table>
+  <tr><td>☝️ Solo índice</td><td>Dibujar</td></tr>
+  <tr><td>✌️ Índice + medio</td><td>Soltar el trazo y puntuarlo</td></tr>
+  <tr><td>🖐️ Palma abierta</td><td>Borrar</td></tr>
+</table>
+
+<p id="err"></p>
+
+<script type="module">
+const V   = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+const cv  = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+const $   = id => document.getElementById(id);
+const setCard = (id,v) => { $(id).querySelector("b").textContent = v; };
+const W = cv.width, H = cv.height;
+
+/* ---------- One-Euro Filter: lo que separa un trazo pro de un garabato ---------- */
+class LowPass{
+  constructor(){ this.s = null; }
+  filter(x,a){ this.s = (this.s===null) ? x : a*x + (1-a)*this.s; return this.s; }
+  reset(){ this.s = null; }
+}
+class OneEuro{
+  constructor(minCutoff=1.2, beta=0.02, dCutoff=1.0){
+    this.minCutoff=minCutoff; this.beta=beta; this.dCutoff=dCutoff;
+    this.xf=new LowPass(); this.df=new LowPass(); this.prev=null; this.tPrev=null;
+  }
+  alpha(cutoff, dt){ const tau = 1/(2*Math.PI*cutoff); return 1/(1+tau/dt); }
+  filter(x, t){
+    if(this.tPrev===null){ this.tPrev=t; this.prev=x; this.xf.filter(x,1); return x; }
+    const dt = Math.max((t-this.tPrev)/1000, 1e-3); this.tPrev=t;
+    const dRaw = (x-this.prev)/dt; this.prev=x;
+    const dHat = this.df.filter(dRaw, this.alpha(this.dCutoff, dt));
+    const cutoff = this.minCutoff + this.beta*Math.abs(dHat);
+    return this.xf.filter(x, this.alpha(cutoff, dt));
+  }
+  reset(){ this.xf.reset(); this.df.reset(); this.prev=null; this.tPrev=null; }
+}
+const fx = new OneEuro(), fy = new OneEuro();
+
+/* ---------- Scoring de circulo: geometria pura, cero ML ---------- */
+function scoreCircle(pts){
+  if(pts.length < 25) return null;
+  const n = pts.length;
+  const cx = pts.reduce((s,p)=>s+p.x,0)/n;
+  const cy = pts.reduce((s,p)=>s+p.y,0)/n;
+  const rs = pts.map(p=>Math.hypot(p.x-cx, p.y-cy));
+  const mean = rs.reduce((a,b)=>a+b,0)/n;
+  if(mean < 45) return null;                          // demasiado pequeno, ignorar
+  const sd = Math.sqrt(rs.reduce((s,r)=>s+(r-mean)*(r-mean),0)/n);
+  const roundness = Math.max(0, 1 - (sd/mean)/0.45);
+
+  let sweep = 0, prev = Math.atan2(pts[0].y-cy, pts[0].x-cx);
+  for(let i=1;i<n;i++){
+    const a = Math.atan2(pts[i].y-cy, pts[i].x-cx);
+    let d = a-prev;
+    while(d >  Math.PI) d -= 2*Math.PI;
+    while(d < -Math.PI) d += 2*Math.PI;
+    sweep += d; prev = a;
+  }
+  const coverage = Math.min(1, Math.abs(sweep)/(2*Math.PI));
+  const gap = Math.hypot(pts[0].x-pts[n-1].x, pts[0].y-pts[n-1].y);
+  const closure = Math.max(0, 1 - gap/(1.6*mean));
+
+  return Math.round(100 * Math.pow(roundness,1.3) * Math.pow(coverage,1.5) * (0.55 + 0.45*closure));
+}
+
+/* ---------- Estado ---------- */
+let stroke = [], frozen = [], best = 0, lastScore = null, flash = 0;
+let mode = "idle", pending = "idle", hold = 0;
+let fpsT = performance.now(), fpsN = 0;
+
+const up = (lm,tip,pip) => lm[tip].y < lm[pip].y - 0.015;
+const BONES = [[0,5],[5,8],[0,9],[9,12],[0,13],[13,16],[0,17],[17,20],[0,1],[1,4]];
+
+function loop(t){
+  requestAnimationFrame(loop);
+  if(video.readyState < 2) return;
+
+  ctx.save(); ctx.translate(W,0); ctx.scale(-1,1);
+  ctx.drawImage(video,0,0,W,H); ctx.restore();
+  ctx.fillStyle = "rgba(8,12,19,.5)"; ctx.fillRect(0,0,W,H);
+
+  let tip = null;
+  const res = landmarker.detectForVideo(video, t);
+  if(res.landmarks && res.landmarks.length){
+    const lm = res.landmarks[0];
+    const idx=up(lm,8,6), mid=up(lm,12,10), rng=up(lm,16,14), pky=up(lm,20,18);
+    const nUp = [idx,mid,rng,pky].filter(Boolean).length;
+
+    let g = "idle";
+    if(nUp >= 4)             g = "clear";
+    else if(idx && mid)      g = "move";
+    else if(idx && !mid)     g = "draw";
+
+    // histeresis: 3 frames seguidos para cambiar de modo (evita parpadeo)
+    if(g === pending){ if(++hold >= 3) mode = g; } else { pending = g; hold = 0; }
+
+    tip = { x:(1-lm[8].x)*W, y:lm[8].y*H };
+    tip.x = fx.filter(tip.x,t); tip.y = fy.filter(tip.y,t);
+
+    ctx.strokeStyle="rgba(96,165,250,.45)"; ctx.lineWidth=2;
+    for(const [a,b] of BONES){
+      ctx.beginPath();
+      ctx.moveTo((1-lm[a].x)*W, lm[a].y*H);
+      ctx.lineTo((1-lm[b].x)*W, lm[b].y*H);
+      ctx.stroke();
+    }
+  } else { mode="idle"; fx.reset(); fy.reset(); }
+
+  if(mode === "draw" && tip){
+    const p = stroke[stroke.length-1];
+    if(!p || Math.hypot(tip.x-p.x, tip.y-p.y) > 2.5) stroke.push(tip);
+  } else if(stroke.length){
+    const s = scoreCircle(stroke);
+    if(s !== null){
+      lastScore = s; flash = 1;
+      setCard("score", s);
+      if(s > best){ best = s; setCard("best", best); }
+    }
+    frozen = stroke; stroke = [];
+  }
+  if(mode === "clear"){ frozen = []; stroke = []; }
+
+  const path = (pts,col,w)=>{
+    if(pts.length < 2) return;
+    ctx.strokeStyle=col; ctx.lineWidth=w; ctx.lineCap="round"; ctx.lineJoin="round";
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+    for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+  };
+  path(frozen, "rgba(148,163,184,.35)", 5);
+  path(stroke, "#4ade80", 6);
+
+  if(tip){
+    ctx.beginPath(); ctx.arc(tip.x, tip.y, mode==="draw" ? 9 : 6, 0, 2*Math.PI);
+    ctx.fillStyle = mode==="draw" ? "#4ade80" : (mode==="clear" ? "#f87171" : "#60a5fa");
+    ctx.fill();
+  }
+
+  if(flash > 0 && lastScore !== null){
+    ctx.globalAlpha = flash; ctx.fillStyle = "#fff"; ctx.textAlign = "center";
+    ctx.font = "700 68px ui-sans-serif,system-ui,sans-serif";
+    ctx.fillText(lastScore, W/2, H/2 + 22);
+    ctx.globalAlpha = 1; flash -= 0.014;
+  }
+
+  const labels = { draw:"✏️ dibujar", move:"✋ mover", clear:"🗑️ borrar", idle:"—" };
+  setCard("mode", labels[mode]);
+  if(++fpsN >= 15){ setCard("fps", Math.round(1000*fpsN/(t-fpsT))); fpsT = t; fpsN = 0; }
+}
+
+/* ---------- Arranque ---------- */
+const video = document.createElement("video");
+video.playsInline = true; video.muted = true; video.autoplay = true;
+let landmarker = null;
+
+$("start").addEventListener("click", async () => {
+  const st = $("status");
+  try{
+    $("start").disabled = true;
+    $("err").textContent = "";
+    st.textContent = "Descargando modelo…";
+    const { HandLandmarker, FilesetResolver } = await import(V);
+    const fileset = await FilesetResolver.forVisionTasks(V + "/wasm");
+    landmarker = await HandLandmarker.createFromOptions(fileset, {
+      baseOptions:{
+        modelAssetPath:"https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+        delegate:"GPU"
+      },
+      runningMode:"VIDEO",
+      numHands:1
+    });
+    st.textContent = "Pidiendo cámara…";
+    video.srcObject = await navigator.mediaDevices.getUserMedia({
+      video:{ width:{ideal:640}, height:{ideal:480}, facingMode:"user" }, audio:false
+    });
+    await video.play();
+    $("gate").classList.add("hidden");
+    requestAnimationFrame(loop);
+  }catch(e){
+    $("start").disabled = false;
+    st.textContent = "";
+    $("err").textContent = "Error: " + (e && e.message ? e.message : e);
+    console.error(e);
+  }
+});
+</script>
+</body>
+</html>

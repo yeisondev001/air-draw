@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+hand_landmarker.task
+node_modules/
+.vercel
+.env*.local

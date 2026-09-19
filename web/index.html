@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Air Draw — dibuja en el aire</title>
+<meta name="description" content="Mini juego de visión por computadora: dibuja figuras en el aire con el dedo y te puntúa. Funciona desde el celular.">
+<meta property="og:title" content="Air Draw — dibuja en el aire con el dedo">
+<meta property="og:description" content="Visión por computadora en tu navegador. Sin instalar nada, sin subir tu cámara a ningún servidor.">
+<style>
+  :root{
+    --bg:#090d14; --panel:#131a25; --line:#232f40;
+    --fg:#e9eff8; --muted:#8ea3be; --green:#4ade80; --blue:#60a5fa;
+    --gold:#fbbf24; --red:#f87171;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.5 ui-sans-serif,system-ui,"Segoe UI",sans-serif;padding:14px;
+  }
+  h1{font-size:19px;margin:0 0 2px;font-weight:700;letter-spacing:-.2px;text-align:center}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 14px;text-align:center}
+  .wrap{display:grid;grid-template-columns:minmax(0,1fr) 258px;gap:16px;max-width:940px;margin:0 auto}
+  @media(max-width:780px){ .wrap{grid-template-columns:1fr} }
+
+  #stage{position:relative;width:100%;aspect-ratio:4/3}
+  canvas{width:100%;height:100%;display:block;border-radius:13px;background:#000;border:1px solid var(--line)}
+  .screen{
+    position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:13px;text-align:center;background:var(--panel);
+    border:1px solid var(--line);border-radius:13px;padding:24px;
+  }
+  .screen.hidden{display:none}
+  input{
+    background:#0b1017;border:1px solid var(--line);color:var(--fg);border-radius:9px;
+    padding:11px 14px;font-size:16px;text-align:center;width:230px;max-width:100%;font-family:inherit;
+  }
+  input:focus{outline:2px solid var(--blue);outline-offset:1px}
+  button{
+    background:var(--green);color:#052912;border:0;border-radius:9px;padding:12px 24px;
+    font-size:15px;font-weight:650;cursor:pointer;font-family:inherit;
+  }
+  button:disabled{opacity:.45;cursor:default}
+  .lock{color:var(--muted);font-size:12px;max-width:320px;margin:0}
+  .big{font-size:52px;font-weight:800;color:var(--green);line-height:1}
+
+  #hud{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 13px;min-width:92px;text-align:center}
+  .card b{display:block;font-size:19px;font-weight:700;margin-top:1px}
+  .k{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.7px}
+  #cTotal b{color:var(--green)} #cRound b{color:var(--blue)} #cFps b{color:var(--gold)}
+
+  aside{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:14px;align-self:start}
+  aside h2{font-size:13px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)}
+  ol{list-style:none;margin:0;padding:0;counter-reset:r}
+  ol li{counter-increment:r;display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px}
+  ol li:first-child{border-top:0}
+  ol li::before{content:counter(r);color:var(--muted);font-size:11px;min-width:16px;font-variant-numeric:tabular-nums}
+  ol li .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  ol li .pt{font-weight:700;color:var(--green);font-variant-numeric:tabular-nums}
+  ol li.me{background:rgba(74,222,128,.08);margin:0 -14px;padding:7px 14px}
+  .empty{color:var(--muted);font-size:12.5px;margin:0}
+  .note{color:var(--gold);font-size:11.5px;margin:10px 0 0;line-height:1.4}
+  .note.hidden{display:none}
+  .hint{color:var(--muted);font-size:12px;margin:12px auto 0;max-width:940px;text-align:center}
+  #err{color:var(--red);font-size:13px;text-align:center;min-height:16px;margin:8px 0 0}
+</style>
+</head>
+<body>
+
+<h1>Air Draw 🖐️</h1>
+<p class="sub">Dibuja las figuras en el aire con el dedo. Sin mouse, sin pantalla táctil.</p>
+
+<div class="wrap">
+  <main>
+    <div id="stage">
+      <canvas id="cv" width="640" height="480"></canvas>
+
+      <div class="screen" id="scIntro">
+        <div style="font-size:38px">🌸 ⭐ ❤️</div>
+        <input id="nick" maxlength="14" placeholder="Tu nombre o nick" autocomplete="off">
+        <button id="btnPlay">Jugar</button>
+        <p class="lock">🔒 Tu cámara se procesa <b>dentro de tu navegador</b>. Ningún frame sale de tu dispositivo.</p>
+        <p class="lock" id="status"></p>
+      </div>
+
+      <div class="screen hidden" id="scEnd">
+        <span class="k" id="endLabel">Puntaje final</span>
+        <div class="big" id="finalScore">0</div>
+        <p class="lock" id="finalMsg"></p>
+        <button id="btnAgain">Jugar de nuevo</button>
+      </div>
+    </div>
+
+    <div id="hud">
+      <div class="card" id="cRound"><span class="k">Figura</span><b>—</b></div>
+      <div class="card" id="cTotal"><span class="k">Puntos</span><b>0</b></div>
+      <div class="card" id="cMode"><span class="k">Gesto</span><b style="font-size:14px">—</b></div>
+      <div class="card" id="cFps"><span class="k">FPS</span><b>0</b></div>
+    </div>
+    <p id="err"></p>
+    <p class="hint">☝️ índice = dibujar · ✌️ índice+medio = cerrar trazo · 🖐️ palma = reintentar</p>
+  </main>
+
+  <aside>
+    <h2>🏆 Mejores puntajes</h2>
+    <ol id="lb"></ol>
+    <p class="empty hidden" id="lbEmpty">Sé el primero en jugar.</p>
+    <p class="note hidden" id="lbNote">⚠️ Ranking local: guardado solo en este navegador.</p>
+  </aside>
+</div>
+
+<script type="module">
+import { SHAPES, scoreStroke, resample, normalize, MAX_SCORE } from "./scoring.js";
+
+const V = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+const TAU = Math.PI * 2;
+const $ = id => document.getElementById(id);
+const setCard = (id, v) => { $(id).querySelector("b").textContent = v; };
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+const cv = $("cv"), ctx = cv.getContext("2d");
+const W = cv.width, H = cv.height;
+
+const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+const DEV = isMobile ? "📱" : "💻";
+
+/* =================== RANKING (remoto, con respaldo local) =================== */
+const LB_KEY = "airdraw_lb_v2";
+let remoteOk = true;
+
+const localRead = () => { try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; } catch { return []; } };
+function localAdd(nick, total) {
+  const rows = localRead();
+  rows.push({ nick, total, dev: DEV });
+  rows.sort((a, b) => b.total - a.total);
+  const top = rows.slice(0, 20);
+  try { localStorage.setItem(LB_KEY, JSON.stringify(top)); } catch {}
+  return top;
+}
+
+function renderLb(rows, mineIdx = -1) {
+  const ol = $("lb");
+  ol.innerHTML = "";
+  $("lbEmpty").classList.toggle("hidden", rows.length > 0);
+  $("lbNote").classList.toggle("hidden", remoteOk);
+  rows.forEach((r, i) => {
+    const li = document.createElement("li");
+    if (i === mineIdx) li.className = "me";
+    const nm = document.createElement("span");
+    nm.className = "nm"; nm.textContent = `${r.dev || "💻"} ${r.nick}`;
+    const pt = document.createElement("span");
+    pt.className = "pt"; pt.textContent = r.total;
+    li.append(nm, pt);
+    ol.appendChild(li);
+  });
+}
+
+async function loadLb() {
+  try {
+    const res = await fetch("/api/scores");
+    if (!res.ok) throw new Error(String(res.status));
+    const data = await res.json();
+    remoteOk = true;
+    renderLb(data.top || []);
+  } catch {
+    remoteOk = false;                      // sin backend todavía: ranking local
+    renderLb(localRead());
+  }
+}
+
+async function submitRun(nick, rounds) {
+  try {
+    const res = await fetch("/api/scores", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nick, dev: DEV, rounds }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || String(res.status));
+    const data = await res.json();
+    remoteOk = true;
+    const idx = (data.top || []).findIndex(r => r.nick === nick && r.total === data.total);
+    renderLb(data.top || [], idx);
+    return data;
+  } catch {
+    remoteOk = false;
+    renderLb(localAdd(nick, rounds._total), 0);
+    return null;
+  }
+}
+
+/* =========================== ONE-EURO FILTER =========================== */
+class LowPass {
+  constructor() { this.s = null; }
+  filter(x, a) { this.s = (this.s === null) ? x : a * x + (1 - a) * this.s; return this.s; }
+  reset() { this.s = null; }
+}
+class OneEuro {
+  constructor(minCutoff = 1.2, beta = 0.02, dCutoff = 1.0) {
+    this.minCutoff = minCutoff; this.beta = beta; this.dCutoff = dCutoff;
+    this.xf = new LowPass(); this.df = new LowPass(); this.prev = null; this.tPrev = null;
+  }
+  alpha(c, dt) { return 1 / (1 + (1 / (TAU * c)) / dt); }
+  filter(x, t) {
+    if (this.tPrev === null) { this.tPrev = t; this.prev = x; this.xf.filter(x, 1); return x; }
+    const dt = Math.max((t - this.tPrev) / 1000, 1e-3); this.tPrev = t;
+    const dRaw = (x - this.prev) / dt; this.prev = x;
+    const dHat = this.df.filter(dRaw, this.alpha(this.dCutoff, dt));
+    return this.xf.filter(x, this.alpha(this.minCutoff + this.beta * Math.abs(dHat), dt));
+  }
+  reset() { this.xf.reset(); this.df.reset(); this.prev = null; this.tPrev = null; }
+}
+const fx = new OneEuro(), fy = new OneEuro();
+
+/* ================================ JUEGO ================================ */
+let landmarker = null, running = false;
+let round = 0, total = 0, nick = "", rounds = [];
+let stroke = [], lastStroke = [], mode = "idle", pending = "idle", hold = 0;
+let flash = 0, flashScore = 0, lockUntil = 0;
+let fpsT = performance.now(), fpsN = 0;
+
+const video = document.createElement("video");
+video.playsInline = true; video.muted = true; video.autoplay = true;
+
+const up = (lm, t, p) => lm[t].y < lm[p].y - 0.015;
+const BONES = [[0,5],[5,8],[0,9],[9,12],[0,13],[13,16],[0,17],[17,20],[0,1],[1,4]];
+
+const GHOSTS = new Map(SHAPES.map(s => [s.id, normalize(resample(s.pts, 180, s.closed))]));
+
+function drawGhost(shape) {
+  const p = GHOSTS.get(shape.id), R = H * 0.30;
+  ctx.strokeStyle = "rgba(96,165,250,.30)";
+  ctx.lineWidth = 3; ctx.setLineDash([9, 7]);
+  ctx.lineJoin = ctx.lineCap = "round";
+  ctx.beginPath();
+  p.forEach((q, i) => {
+    const x = W / 2 + q.x * R, y = H / 2 + q.y * R;
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  if (shape.closed) ctx.closePath();
+  ctx.stroke(); ctx.setLineDash([]);
+}
+
+function path(pts, col, w) {
+  if (pts.length < 2) return;
+  ctx.strokeStyle = col; ctx.lineWidth = w;
+  ctx.lineCap = ctx.lineJoin = "round";
+  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.stroke();
+}
+
+function nextRound() {
+  round++;
+  stroke = []; lastStroke = [];
+  fx.reset(); fy.reset();
+  if (round > SHAPES.length) { endGame(); return; }
+  setCard("cRound", `${SHAPES[round - 1].emoji} ${round}/${SHAPES.length}`);
+}
+
+async function endGame() {
+  running = false;
+  $("endLabel").textContent = "Puntaje final";
+  $("finalScore").textContent = total;
+  $("finalMsg").textContent = "Guardando…";
+  $("scEnd").classList.remove("hidden");
+
+  rounds._total = total;
+  const data = await submitRun(nick, rounds);
+
+  const pct = total / MAX_SCORE;
+  const base = pct > .8 ? "¡Excelente!" : pct > .55 ? "Nada mal." : "Aléjate un poco de la cámara y probá de nuevo.";
+  $("finalMsg").textContent = data
+    ? `${base} Puesto #${data.rank} de ${MAX_SCORE} posibles.`
+    : `${base} ${total} de ${MAX_SCORE}.`;
+}
+
+function loop(t) {
+  requestAnimationFrame(loop);
+  if (!running || video.readyState < 2) return;
+
+  ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1);
+  ctx.drawImage(video, 0, 0, W, H); ctx.restore();
+  ctx.fillStyle = "rgba(6,10,17,.55)"; ctx.fillRect(0, 0, W, H);
+
+  const shape = SHAPES[round - 1];
+  if (shape) drawGhost(shape);
+
+  let tip = null;
+  const res = landmarker.detectForVideo(video, t);
+  if (res.landmarks && res.landmarks.length) {
+    const lm = res.landmarks[0];
+    const i = up(lm,8,6), m = up(lm,12,10);
+    const nUp = [i, m, up(lm,16,14), up(lm,20,18)].filter(Boolean).length;
+
+    let g = "idle";
+    if (nUp >= 4)       g = "clear";
+    else if (i && m)    g = "done";
+    else if (i && !m)   g = "draw";
+
+    // Histéresis: 3 frames seguidos antes de cambiar de gesto.
+    if (g === pending) { if (++hold >= 3) mode = g; } else { pending = g; hold = 0; }
+
+    tip = { x: (1 - lm[8].x) * W, y: lm[8].y * H };
+    tip.x = fx.filter(tip.x, t); tip.y = fy.filter(tip.y, t);
+
+    ctx.strokeStyle = "rgba(96,165,250,.40)"; ctx.lineWidth = 2;
+    for (const [a, b] of BONES) {
+      ctx.beginPath();
+      ctx.moveTo((1 - lm[a].x) * W, lm[a].y * H);
+      ctx.lineTo((1 - lm[b].x) * W, lm[b].y * H);
+      ctx.stroke();
+    }
+  } else { mode = "idle"; fx.reset(); fy.reset(); }
+
+  if (t >= lockUntil) {
+    if (mode === "draw" && tip) {
+      const last = stroke[stroke.length - 1];
+      if (!last || dist(tip, last) > 2.5) stroke.push(tip);
+    } else if (mode === "done" && stroke.length) {
+      const r = scoreStroke(stroke, shape);
+      if (r) {
+        total += r.score; flashScore = r.score; flash = 1;
+        setCard("cTotal", total);
+        rounds.push({ shapeId: shape.id, points: r.normalized.map(p => [p.x, p.y]) });
+        lastStroke = stroke; stroke = [];
+        lockUntil = t + 1700;
+        setTimeout(nextRound, 1700);
+      } else stroke = [];
+    }
+    if (mode === "clear") { stroke = []; lastStroke = []; }
+  }
+
+  path(lastStroke, "rgba(148,163,184,.30)", 5);
+  path(stroke, "#4ade80", 6);
+
+  if (tip) {
+    ctx.beginPath(); ctx.arc(tip.x, tip.y, mode === "draw" ? 9 : 6, 0, TAU);
+    ctx.fillStyle = mode === "draw" ? "#4ade80" : (mode === "clear" ? "#f87171" : "#60a5fa");
+    ctx.fill();
+  }
+
+  if (shape && flash <= 0) {
+    ctx.fillStyle = "rgba(233,239,248,.85)"; ctx.textAlign = "center";
+    ctx.font = "600 21px ui-sans-serif,system-ui,sans-serif";
+    ctx.fillText(`Dibuja: ${shape.name} ${shape.emoji}`, W / 2, 34);
+  }
+  if (flash > 0) {
+    ctx.globalAlpha = flash; ctx.textAlign = "center";
+    ctx.fillStyle = flashScore >= 70 ? "#4ade80" : flashScore >= 40 ? "#fbbf24" : "#f87171";
+    ctx.font = "800 76px ui-sans-serif,system-ui,sans-serif";
+    ctx.fillText(flashScore, W / 2, H / 2 + 26);
+    ctx.globalAlpha = 1; flash -= 0.010;
+  }
+
+  setCard("cMode", { draw:"✏️ dibujar", done:"✌️ listo", clear:"🖐️ borrar", idle:"—" }[mode]);
+  if (++fpsN >= 15) { setCard("cFps", Math.round(1000 * fpsN / (t - fpsT))); fpsT = t; fpsN = 0; }
+}
+
+/* =============================== ARRANQUE =============================== */
+async function boot() {
+  const st = $("status");
+  st.textContent = "Descargando modelo…";
+  const { HandLandmarker, FilesetResolver } = await import(V);
+  const fileset = await FilesetResolver.forVisionTasks(V + "/wasm");
+  landmarker = await HandLandmarker.createFromOptions(fileset, {
+    baseOptions: {
+      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+      delegate: "GPU"
+    },
+    runningMode: "VIDEO", numHands: 1
+  });
+  st.textContent = "Pidiendo cámara…";
+  video.srcObject = await navigator.mediaDevices.getUserMedia({
+    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, audio: false
+  });
+  await video.play();
+  st.textContent = "";
+}
+
+function startGame() {
+  round = 0; total = 0; rounds = []; stroke = []; lastStroke = [];
+  flash = 0; lockUntil = 0;
+  setCard("cTotal", 0);
+  $("scIntro").classList.add("hidden");
+  $("scEnd").classList.add("hidden");
+  running = true;
+  nextRound();
+}
+
+$("btnPlay").addEventListener("click", async () => {
+  nick = ($("nick").value || "").trim().slice(0, 14) || "Anónimo";
+  $("btnPlay").disabled = true;
+  $("err").textContent = "";
+  try {
+    if (!landmarker || !video.srcObject) await boot();
+    startGame();
+    requestAnimationFrame(loop);
+  } catch (e) {
+    $("status").textContent = "";
+    $("err").textContent = "Error: " + (e?.message || e);
+    console.error(e);
+  } finally { $("btnPlay").disabled = false; }
+});
+
+$("btnAgain").addEventListener("click", startGame);
+$("nick").addEventListener("keydown", e => { if (e.key === "Enter") $("btnPlay").click(); });
+loadLb();
+</script>
+</body>
+</html>
