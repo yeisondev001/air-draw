@@ -23,12 +23,21 @@
   .wrap{display:grid;grid-template-columns:minmax(0,1fr) 258px;gap:16px;max-width:940px;margin:0 auto}
   @media(max-width:780px){ .wrap{grid-template-columns:1fr} }
 
-  #stage{position:relative;width:100%;aspect-ratio:4/3}
+  #stage{
+    position:relative;width:100%;aspect-ratio:4/3;margin-inline:auto;
+  }
+  /* En desktop la altura manda: que canvas + HUD + ayuda entren sin scroll.
+     El 4/3 fija la relación; el max-width limita el alto a 100vh menos lo
+     que ocupan título, HUD, error y ayuda (~285px). En móvil se permite
+     scrollear porque la vista es vertical. */
+  @media(min-width:781px){
+    #stage{max-width:min(100%,calc((100vh - 285px)*4/3))}
+  }
   canvas{width:100%;height:100%;display:block;border-radius:13px;background:#000;border:1px solid var(--line)}
   .screen{
     position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
-    justify-content:center;gap:13px;text-align:center;background:var(--panel);
-    border:1px solid var(--line);border-radius:13px;padding:24px;
+    justify-content:center;gap:10px;text-align:center;background:var(--panel);
+    border:1px solid var(--line);border-radius:13px;padding:18px 24px;
   }
   .screen.hidden{display:none}
   input{
