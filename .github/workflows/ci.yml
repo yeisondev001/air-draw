@@ -1,0 +1,29 @@
+# CI: tests del motor de puntaje + chequeo de sintaxis del juego de escritorio.
+# El motor vive en web/scoring.js (sin dependencias) así que los tests corren
+# en segundos con Node puro, sin instalar MediaPipe ni OpenCV.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    name: Motor de puntaje (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test tests/
+
+  python:
+    name: Escritorio (sintaxis Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m py_compile air_draw.py
