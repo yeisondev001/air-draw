@@ -464,7 +464,8 @@ function startGame(){
 }
 
 $("btnPlay").addEventListener("click", async () => {
-  nick = ($("nick").value || "").trim().slice(0,14) || "Anónimo";
+  nick = ($("nick").value || "").trim().slice(0,14);
+  if(!nick){ $("err").textContent = "Poné un nick para jugar: es con el que entrás al ranking."; return; }
   $("btnPlay").disabled = true;
   $("err").textContent = "";
   try{
@@ -476,11 +477,14 @@ $("btnPlay").addEventListener("click", async () => {
     $("err").textContent = "Error: " + (e && e.message ? e.message : e);
     console.error(e);
   }finally{
-    $("btnPlay").disabled = false;
+    $("btnPlay").disabled = !$("nick").value.trim();
   }
 });
 
 $("btnAgain").addEventListener("click", startGame);
+// Sin nick no se juega: el botón queda deshabilitado hasta que escribás algo.
+$("btnPlay").disabled = !$("nick").value.trim();
+$("nick").addEventListener("input", () => { $("btnPlay").disabled = !$("nick").value.trim(); });
 $("nick").addEventListener("keydown", e => { if(e.key === "Enter") $("btnPlay").click(); });
 lbRender();
 </script>
