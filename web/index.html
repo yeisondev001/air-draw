@@ -5,8 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Air Draw — dibuja en el aire</title>
 <meta name="description" content="Mini juego de visión por computadora: dibuja figuras en el aire con el dedo y te puntúa. Funciona desde el celular.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%96%90%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <meta property="og:title" content="Air Draw — dibuja en el aire con el dedo">
 <meta property="og:description" content="Visión por computadora en tu navegador. Sin instalar nada, sin subir tu cámara a ningún servidor.">
+<meta property="og:url" content="https://air-draw-zeta.vercel.app/">
+<meta property="og:image" content="https://air-draw-zeta.vercel.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Air Draw: las cinco figuras del juego con el puntaje 100">
+<meta name="twitter:card" content="summary_large_image">
 <style>
   :root{
     --bg:#090d14; --panel:#131a25; --line:#232f40;
@@ -51,6 +58,7 @@
     font-size:15px;font-weight:650;cursor:pointer;font-family:inherit;
   }
   button:disabled{opacity:.45;cursor:default}
+  button.ghost{background:transparent;color:var(--blue);border:1px solid var(--line);padding:10px 18px;font-size:13px}
   .lock{color:var(--muted);font-size:12px;max-width:320px;margin:0}
   .big{font-size:52px;font-weight:800;color:var(--green);line-height:1}
   .warn{
@@ -130,6 +138,7 @@
         <div class="big" id="finalScore">0</div>
         <p class="lock" id="finalMsg"></p>
         <button id="btnAgain">Jugar de nuevo</button>
+        <button id="btnShare" class="ghost">Compartir mi puntaje 📣</button>
         <p class="lock">… o sostené el pulgar arriba 👍 y arranca solo</p>
       </div>
 
@@ -519,6 +528,21 @@ $("btnPlay").addEventListener("click", async () => {
 });
 
 $("btnAgain").addEventListener("click", startGame);
+
+/** Compartir el puntaje: WhatsApp/X/etc. vía Web Share API; en desktop
+    que no la implementa, copia el texto al portapapeles. */
+$("btnShare").addEventListener("click", async () => {
+  const msg = `Hice ${total} de ${MAX_SCORE} en Air Draw 🖐️ — dibujá en el aire con tu dedo: ${location.origin}`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: "Air Draw", text: msg });
+    } else {
+      await navigator.clipboard.writeText(msg);
+      $("btnShare").textContent = "¡Copiado! Pegalo donde quieras ✅";
+      setTimeout(() => { $("btnShare").textContent = "Compartir mi puntaje 📣"; }, 2500);
+    }
+  } catch {}
+});
 // Sin nick no se juega: el botón queda deshabilitado hasta que escribás algo.
 $("btnPlay").disabled = !$("nick").value.trim();
 $("nick").addEventListener("input", () => { $("btnPlay").disabled = !$("nick").value.trim(); });
