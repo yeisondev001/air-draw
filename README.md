@@ -4,6 +4,10 @@ Un mini juego de **visión por computadora**: te muestra una figura y la dibujas
 
 Lo interesante: **no hay ningún modelo entrenado para puntuar**. La flor es una curva matemática y la comparación es geometría pura.
 
+### 👉 [Probalo en tu navegador](https://air-draw-zeta.vercel.app)
+
+Funciona desde el celular (Android e iOS) y desde la computadora. No hay que instalar nada, y **la cámara se procesa en tu dispositivo** — ningún frame se envía a ningún servidor.
+
 <!-- TODO: reemplazar por el GIF de la demo -->
 ![Demo](docs/demo.gif)
 
