@@ -328,11 +328,11 @@ def main():
                     model_asset_path=ensure_model(), delegate=delegate),
                 running_mode=vision.RunningMode.VIDEO,
                 num_hands=1,
-                # Confianza mas baja que el default (0.5): el tracking
-                # aguanta mejor la luz floja y los movimientos rapidos.
-                min_hand_detection_confidence=0.35,
-                min_hand_presence_confidence=0.35,
-                min_tracking_confidence=0.35,
+                # Confianza alta: 0.5 era muy permisivo combinado con la mascara
+                # del 38% superior (aparecian manos donde no las habia).
+                min_hand_detection_confidence=0.6,
+                min_hand_presence_confidence=0.6,
+                min_tracking_confidence=0.6,
             ))
 
     try:

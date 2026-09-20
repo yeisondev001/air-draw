@@ -566,11 +566,11 @@ async function boot() {
   const make = delegate => HandLandmarker.createFromOptions(fileset, {
     baseOptions: { modelAssetPath: MODEL_URL, delegate },
     runningMode: "VIDEO", numHands: 1,
-    // Confianza más baja que el default (0.5): el tracking aguanta mejor
-    // la luz floja y los movimientos rápidos sin perder la mano.
-    minHandDetectionConfidence: 0.35,
-    minHandPresenceConfidence: 0.35,
-    minTrackingConfidence: 0.35,
+    // Confianza alta: 0.5 era demasiado permisivo combinado con la mascara
+    // del 38% superior (aparecian manos donde no las habia). 0.6 es mas estricto.
+    minHandDetectionConfidence: 0.6,
+    minHandPresenceConfidence: 0.6,
+    minTrackingConfidence: 0.6,
   });
   try { landmarker = await make("GPU"); }
   catch { landmarker = await make("CPU"); }
