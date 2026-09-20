@@ -140,6 +140,7 @@
         <p class="lock" id="finalMsg"></p>
         <button id="btnAgain">Jugar de nuevo</button>
         <button id="btnShare" class="ghost">Compartir mi puntaje 📣</button>
+        <button id="btnDownload" class="ghost">Descargar la foto 💾</button>
         <p class="lock">… o sostené el pulgar arriba 👍 y arranca solo</p>
       </div>
 
@@ -713,6 +714,26 @@ function buildScoreCard() {
   return c;
 }
 
+/** La tarjeta compartible: la foto del puntaje si ya terminó la partida;
+    si no, el frame vivo del juego con una banda de puntaje. */
+function buildCard() {
+  const card = document.createElement("canvas");
+  if (shareCard) {
+    card.width = shareCard.width; card.height = shareCard.height;
+    card.getContext("2d").drawImage(shareCard, 0, 0);
+  } else {
+    card.width = cv.width; card.height = cv.height;
+    const c2 = card.getContext("2d");
+    c2.drawImage(cv, 0, 0);
+    c2.fillStyle = "rgba(6,10,17,.75)"; c2.fillRect(0, 0, cv.width, 56);
+    c2.fillStyle = "#e9eff8"; c2.font = "600 28px ui-sans-serif,system-ui,sans-serif";
+    c2.textAlign = "center";
+    c2.fillText(`Air Draw — ${total}/${MAX_SCORE} 🖐️`, cv.width / 2, 40);
+  }
+  return card;
+}
+const cardBlob = () => new Promise(r => buildCard().toBlob(r, "image/png"));
+
 /** Compartir el puntaje CON la foto del dibujo.
     - Móvil: Web Share API nivel 2 comparte el PNG (LinkedIn aparece si tenés la app).
     - LinkedIn desktop no acepta imágenes por URL (solo links), así que en
@@ -720,22 +741,7 @@ function buildScoreCard() {
 $("btnShare").addEventListener("click", async () => {
   const msg = `Hice ${total} de ${MAX_SCORE} en Air Draw 🖐️ — dibujá en el aire con tu dedo: ${location.origin}`;
   try {
-    // Tarjeta: la foto del puntaje si ya terminó la partida; si no, el frame vivo.
-    const card = document.createElement("canvas");
-    if (shareCard) {
-      card.width = shareCard.width; card.height = shareCard.height;
-      card.getContext("2d").drawImage(shareCard, 0, 0);
-    } else {
-      card.width = cv.width; card.height = cv.height;
-      const c2 = card.getContext("2d");
-      c2.drawImage(cv, 0, 0);
-      c2.fillStyle = "rgba(6,10,17,.75)"; c2.fillRect(0, 0, cv.width, 56);
-      c2.fillStyle = "#e9eff8"; c2.font = "600 28px ui-sans-serif,system-ui,sans-serif";
-      c2.textAlign = "center";
-      c2.fillText(`Air Draw — ${total}/${MAX_SCORE} 🖐️`, cv.width / 2, 40);
-    }
-
-    const blob = await new Promise(r => card.toBlob(r, "image/png"));
+    const blob = await cardBlob();
     const file = new File([blob], "air-draw.png", { type: "image/png" });
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -751,6 +757,21 @@ $("btnShare").addEventListener("click", async () => {
       }
       setTimeout(() => { $("btnShare").textContent = "Compartir mi puntaje 📣"; }, 2500);
     }
+  } catch {}
+});
+
+/** Descarga directa de la foto del puntaje, sin depender de la API de share. */
+$("btnDownload").addEventListener("click", async () => {
+  try {
+    const blob = await cardBlob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `air-draw-${(nick || "puntaje").toLowerCase().replace(/[^a-z0-9_-]+/g, "")}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    $("btnDownload").textContent = "💾 ¡Descargada!";
+    setTimeout(() => { $("btnDownload").textContent = "Descargar la foto 💾"; }, 2500);
   } catch {}
 });
 // Sin nick no se juega: el botón queda deshabilitado hasta que escribás algo.
