@@ -422,8 +422,7 @@ function loop(t) {
       const last = stroke[stroke.length - 1];
       if (!last || dist(tip, last) > 2.5) { stroke.push(tip); lastDrawT = t; }
 
-      // Cierre automático: si el dedo queda quieto ~1 s y el trazo ya sirve,
-      // se puntúa solo — sin que nadie tenga que saber el gesto de ✌️.
+      // Cuenta regresiva alrededor de la punta (solo cuando se ve la mano).
       const pausa = (t - lastDrawT) / AUTO_MS;
       if (stroke.length >= 18 && strokeLen(stroke) >= MIN_LEN && pausa > 0.05 && pausa < 1) {
         ctx.beginPath();
@@ -431,8 +430,17 @@ function loop(t) {
         ctx.arc(tip.x, tip.y, 16, -Math.PI / 2, -Math.PI / 2 + pausa * TAU);
         ctx.stroke();
       }
-      if (pausa >= 1 && stroke.length >= 18 && strokeLen(stroke) >= MIN_LEN) mode = "done";
-    } else if (mode === "done" && stroke.length) {
+    }
+
+    // Cierre automático: corre siempre que haya un trazo válido quieto
+    // por AUTO_MS, aunque saques la mano. El ✌️ sigue funcionando.
+    const pausa = (t - lastDrawT) / AUTO_MS;
+    if (pausa >= 1 && stroke.length >= 18 && strokeLen(stroke) >= MIN_LEN
+        && mode !== "done" && mode !== "clear") {
+      mode = "done";
+    }
+
+    else if (mode === "done" && stroke.length) {
       const r = scoreStroke(stroke, shape);
       if (r) {
         total += r.score; flashScore = r.score; flash = 1;
