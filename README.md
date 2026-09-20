@@ -101,23 +101,35 @@ A eso se le suma un **término de curvatura**: el ángulo de giro en cada punto,
 
 ## 🛠️ Tecnologías
 
-Hay dos versiones del mismo juego, con el mismo motor de puntuación:
+Dos versiones del mismo juego, con el mismo motor de puntuación:
 
-**Escritorio (`air_draw.py`)**
+### 🖥️ Escritorio — `air_draw.py`
 
-- **Python 3.9+**
-- **MediaPipe Tasks (Vision)** — modelo Hand Landmarker, 21 puntos por mano
+![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)
+![MediaPipe](https://img.shields.io/badge/MediaPipe-Hand_Landmarker-0068FF)
+![OpenCV](https://img.shields.io/badge/OpenCV-captura_%26_render-5C3EE8?logo=opencv&logoColor=white)
+![NumPy](https://img.shields.io/badge/NumPy-comparaci%C3%B3n_vectorizada-013243?logo=numpy&logoColor=white)
+
+- **MediaPipe Tasks (Vision)** — modelo Hand Landmarker: 21 puntos por mano
 - **OpenCV** — captura de video y renderizado
 - **NumPy** — remuestreo y comparación vectorizada
 
-**Web (`web/`, la jugable en línea)**
+### 🌐 Web — `web/` · [▶ jugable en línea](https://air-draw-zeta.vercel.app)
 
-- **JavaScript + Canvas** — sin framework, un solo HTML con el juego
+![JavaScript](https://img.shields.io/badge/JavaScript-ES2022-F7DF1E?logo=javascript&logoColor=black)
+![Canvas](https://img.shields.io/badge/Canvas-2D-222222)
+![MediaPipe WASM](https://img.shields.io/badge/MediaPipe-Task_Vision_WASM-0068FF)
+![Vercel](https://img.shields.io/badge/Vercel-hosting_%2B_serverless-000000?logo=vercel&logoColor=white)
+![Upstash Redis](https://img.shields.io/badge/Upstash-Redis_ranking-00E291?logo=redis&logoColor=white)
+
+- **JavaScript + Canvas** — sin framework: un solo HTML con el juego
 - **MediaPipe Tasks Vision (WASM)** — el mismo modelo corriendo en el navegador
 - **Vercel** — hosting + serverless function del ranking
-- **Upstash Redis** — el ranking global (el servidor recalcula el puntaje: editar el score en devtools no sirve)
+- **Upstash Redis** — ranking global (el servidor recalcula el puntaje: editar el score en devtools no sirve)
 
-El motor (`web/scoring.js`) es JavaScript puro y compartido entre cliente y servidor — y tiene tests (`node --test tests/`, corren en el CI).
+**Motor compartido:** `web/scoring.js` es JavaScript puro, lo usa el cliente para mostrar el puntaje y el servidor para recalcularlo antes de guardar — y tiene tests (`node --test tests/`, corren en el CI).
+
+![Node.js](https://img.shields.io/badge/Node.js-tests-en%20CI-339933?logo=nodedotjs&logoColor=white)
 
 ---
 
