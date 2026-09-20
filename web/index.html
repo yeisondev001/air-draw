@@ -163,7 +163,7 @@
 </div>
 
 <script type="module">
-import { SHAPES, scoreStroke, resample, normalize, MAX_SCORE } from "./scoring.js";
+import { SHAPES, scoreStroke, scoreNormalized, resample, normalize, MAX_SCORE } from "./scoring.js";
 
 const V = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 const TAU = Math.PI * 2;
@@ -358,6 +358,7 @@ async function endGame() {
   $("finalScore").textContent = total;
   $("finalMsg").textContent = "Guardando…";
   $("scEnd").classList.remove("hidden");
+  shareCard = buildScoreCard();
 
   rounds._total = total;
   const data = await submitRun(nick, rounds);
@@ -377,15 +378,10 @@ async function endGame() {
 
 /** Bucle chico para la pantalla final: detecta 👍 sostenido ~0.4 s y reinicia.
     Corre aparte porque el loop principal se detiene cuando termina el juego. */
-// MediaPipe confunde la mano con la cara cuando están cerca. Para evitarlo
-// enmascaramos el tercio superior del frame antes de mandárselo al detector.
-const maskCanvas = new OffscreenCanvas(W, H);
-const maskCtx = maskCanvas.getContext("2d", { willReadFrequently: true });
+// Sin máscara ni guard: la tira negra tapaba la punta del índice cuando la
+// mano subía (el punto se clavaba en el borde de la máscara, y≈0.22·H).
 function frameParaDetector() {
-  maskCtx.drawImage(video, 0, 0, W, H);
-  maskCtx.fillStyle = "#000";
-  maskCtx.fillRect(0, 0, W, H * 0.22);   // tira negra arriba: solo donde suele estar la cara
-  return maskCanvas.transferToImageBitmap();
+  return video;
 }
 
 function endWatch(t) {
@@ -412,16 +408,13 @@ function loop(t) {
   const res = landmarker.detectForVideo(frameParaDetector(), t);
   if (res.landmarks && res.landmarks.length) {
     const lm = res.landmarks[0];
-    // Si la muñeca entra en la zona enmascarada (top 42%), los landmarks
-    // son basura: mejor no clasificar que inventar gestos.
+    // Sin guard de muñeca: filtraba gestos válidos cuando la mano subía.
     let g = "idle";
-    if (lm[0].y > 0.25) {
-      const i = up(lm,8,6), m = up(lm,12,10);
-      const nUp = [i, m, up(lm,16,14), up(lm,20,18)].filter(Boolean).length;
-      if (nUp >= 4)       g = "clear";
-      else if (i && m)    g = "done";
-      else if (i && !m)   g = "draw";
-    }
+    const i = up(lm,8,6), m = up(lm,12,10);
+    const nUp = [i, m, up(lm,16,14), up(lm,20,18)].filter(Boolean).length;
+    if (nUp >= 4)       g = "clear";
+    else if (i && m)    g = "done";
+    else if (i && !m)   g = "draw";
 
     // Histéresis: 3 frames seguidos antes de cambiar de gesto.
     if (g === pending) { if (++hold >= 3) mode = g; } else { pending = g; hold = 0; }
@@ -446,25 +439,27 @@ function loop(t) {
       const last = stroke[stroke.length - 1];
       if (!last || dist(tip, last) > 2.5) { stroke.push(tip); lastDrawT = t; }
 
-      // Cuenta regresiva alrededor de la punta (solo cuando se ve la mano).
+      // Cuenta regresiva alrededor de la punta: cuando el anillo se completa,
+      // el trazo se cierra solo (✌️ sigue como cierre manual).
       const pausa = (t - lastDrawT) / AUTO_MS;
       if (stroke.length >= 18 && strokeLen(stroke) >= MIN_LEN && pausa > 0.05 && pausa < 1) {
         ctx.beginPath();
-        ctx.strokeStyle = "rgba(251,191,36,.9)"; ctx.lineWidth = 4;
+        ctx.strokeStyle = "rgba(251,191,36,1)"; ctx.lineWidth = 4;
         ctx.arc(tip.x, tip.y, 16, -Math.PI / 2, -Math.PI / 2 + pausa * TAU);
         ctx.stroke();
       }
     }
 
-    // Cierre automático: corre siempre que haya un trazo válido quieto
-    // por AUTO_MS, aunque saques la mano. El ✌️ sigue funcionando.
+    // Cierre automático: con el dedo quieto (o la mano fuera del frame) por
+    // AUTO_MS, el trazo queda listo y se puntúa solo. Sin if/else encadenados:
+    // la histéresis re-escribe mode="draw" cada frame y el else nunca corría.
     const pausa = (t - lastDrawT) / AUTO_MS;
     if (pausa >= 1 && stroke.length >= 18 && strokeLen(stroke) >= MIN_LEN
         && mode !== "done" && mode !== "clear") {
       mode = "done";
     }
 
-    else if (mode === "done" && stroke.length) {
+    if (mode === "done" && stroke.length) {
       const r = scoreStroke(stroke, shape);
       if (r) {
         total += r.score; flashScore = r.score; flash = 1;
@@ -622,16 +617,82 @@ $("btnPlay").addEventListener("click", async () => {
 
 $("btnAgain").addEventListener("click", startGame);
 
-/** Compartir el puntaje: WhatsApp/X/etc. vía Web Share API; en desktop
-    que no la implementa, copia el texto al portapapeles. */
+let shareCard = null;   // foto del puntaje: se genera al terminar la partida
+
+/** Tarjeta final para compartir: nick, total y cómo fue figura por figura.
+    Es una "foto del puntaje" de verdad, no el frame en vivo del juego. */
+function buildScoreCard() {
+  const c = document.createElement("canvas");
+  c.width = 1000; c.height = 640;
+  const g = c.getContext("2d");
+  const grad = g.createLinearGradient(0, 0, 0, c.height);
+  grad.addColorStop(0, "#0b1220"); grad.addColorStop(1, "#060a11");
+  g.fillStyle = grad; g.fillRect(0, 0, c.width, c.height);
+
+  g.textAlign = "center";
+  g.fillStyle = "#60a5fa"; g.font = "700 30px ui-sans-serif,system-ui,sans-serif";
+  g.fillText("🖐️ Air Draw", c.width / 2, 64);
+  g.fillStyle = "#e9eff8"; g.font = "800 52px ui-sans-serif,system-ui,sans-serif";
+  g.fillText(nick || "jugador", c.width / 2, 132);
+  g.fillStyle = "#4ade80"; g.font = "800 104px ui-sans-serif,system-ui,sans-serif";
+  g.fillText(`${total} / ${MAX_SCORE}`, c.width / 2, 244);
+
+  const y0 = 306, rowH = 56, FONT = "600 28px ui-sans-serif,system-ui,sans-serif";
+  rounds.forEach((r, i) => {
+    const s = SHAPES.find(x => x.id === r.shapeId);
+    const sc = scoreNormalized(r.points.map(p => ({ x: p[0], y: p[1] })), r.shapeId) ?? 0;
+    const y = y0 + i * rowH;
+    g.textAlign = "left"; g.fillStyle = "#e9eff8"; g.font = FONT;
+    g.fillText(`${s.emoji} ${s.name}`, 120, y);
+    g.fillStyle = "rgba(148,163,184,.25)"; g.fillRect(430, y - 23, 360, 26);
+    g.fillStyle = sc >= 70 ? "#4ade80" : sc >= 40 ? "#fbbf24" : "#f87171";
+    g.fillRect(430, y - 23, 360 * sc / 100, 26);
+    g.textAlign = "right";
+    g.fillText(sc, 860, y);
+  });
+
+  g.textAlign = "center"; g.fillStyle = "#94a3b8";
+  g.font = "500 24px ui-sans-serif,system-ui,sans-serif";
+  g.fillText("dibujá en el aire con tu dedo → " + location.origin, c.width / 2, c.height - 28);
+  return c;
+}
+
+/** Compartir el puntaje CON la foto del dibujo.
+    - Móvil: Web Share API nivel 2 comparte el PNG (LinkedIn aparece si tenés la app).
+    - LinkedIn desktop no acepta imágenes por URL (solo links), así que en
+      desktop copiamos la imagen al portapapeles para pegarla en el post. */
 $("btnShare").addEventListener("click", async () => {
   const msg = `Hice ${total} de ${MAX_SCORE} en Air Draw 🖐️ — dibujá en el aire con tu dedo: ${location.origin}`;
   try {
-    if (navigator.share) {
-      await navigator.share({ title: "Air Draw", text: msg });
+    // Tarjeta: la foto del puntaje si ya terminó la partida; si no, el frame vivo.
+    const card = document.createElement("canvas");
+    if (shareCard) {
+      card.width = shareCard.width; card.height = shareCard.height;
+      card.getContext("2d").drawImage(shareCard, 0, 0);
     } else {
-      await navigator.clipboard.writeText(msg);
-      $("btnShare").textContent = "¡Copiado! Pegalo donde quieras ✅";
+      card.width = cv.width; card.height = cv.height;
+      const c2 = card.getContext("2d");
+      c2.drawImage(cv, 0, 0);
+      c2.fillStyle = "rgba(6,10,17,.75)"; c2.fillRect(0, 0, cv.width, 56);
+      c2.fillStyle = "#e9eff8"; c2.font = "600 28px ui-sans-serif,system-ui,sans-serif";
+      c2.textAlign = "center";
+      c2.fillText(`Air Draw — ${total}/${MAX_SCORE} 🖐️`, cv.width / 2, 40);
+    }
+
+    const blob = await new Promise(r => card.toBlob(r, "image/png"));
+    const file = new File([blob], "air-draw.png", { type: "image/png" });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ title: "Air Draw", text: msg, files: [file] });
+    } else {
+      // Desktop: imagen al portapapeles; si el navegador no deja, texto.
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        $("btnShare").textContent = "📸 ¡Foto copiada! Pegala en tu post ✅";
+      } catch {
+        await navigator.clipboard.writeText(msg);
+        $("btnShare").textContent = "¡Copiado! Pegalo donde quieras ✅";
+      }
       setTimeout(() => { $("btnShare").textContent = "Compartir mi puntaje 📣"; }, 2500);
     }
   } catch {}

@@ -121,6 +121,13 @@ export function turning(pts, closed = true) {
 
 const TURN_W = 0.55;   // cuánto pesa la curvatura frente a la posición
 
+// En el aire un trazo real siempre tiene un tramo flojo (el arranque, la
+// esquina donde el filtro va más atrás). Promediar ese tramo con el resto
+// hundía el puntaje a 0 aunque el resto fuera perfecto: la media recortada
+// descarta el peor 12% de los errores de posición. El error de curvatura se
+// promedia completo: ahi vive la firma de esquinas y no conviene perderla.
+const TRIM = 0.12;
+
 /** Distancia combinada (posición + curvatura), probando todos los puntos de
     inicio si la figura es cerrada, y ambos sentidos de giro. */
 export function meanDistance(A, B, closed, TA, TB) {
@@ -131,15 +138,20 @@ export function meanDistance(A, B, closed, TA, TB) {
   let best = Infinity;
   for (let dir = 0; dir < 2; dir++) {
     for (let s = 0; s < shifts; s++) {
-      let pos = 0, turn = 0;
+      const posE = new Array(n), turnE = new Array(n);
       for (let i = 0; i < n; i++) {
         const j = dir === 0 ? (i + s) % n : (((s - i) % n) + n) % n;
-        pos += (A[i].x - B[j].x) ** 2 + (A[i].y - B[j].y) ** 2;
+        posE[i] = (A[i].x - B[j].x) ** 2 + (A[i].y - B[j].y) ** 2;
         // Al invertir el sentido, los ángulos de giro cambian de signo.
         const tb = dir === 0 ? TB[j] : -TB[j];
-        turn += (TA[i] - tb) ** 2;
+        turnE[i] = (TA[i] - tb) ** 2;
       }
-      const d = Math.sqrt(pos / n) + TURN_W * Math.sqrt(turn / n);
+      posE.sort((a, b) => a - b);
+      const k = Math.floor(n * TRIM);
+      let pos = 0, turn = 0;
+      for (let i = 0; i < n - k; i++) pos += posE[i];
+      for (let i = 0; i < n; i++) turn += turnE[i];
+      const d = Math.sqrt(pos / (n - k)) + TURN_W * Math.sqrt(turn / n);
       if (d < best) best = d;
     }
   }
@@ -151,10 +163,11 @@ const TEMPLATES = new Map(SHAPES.map(s => {
   return [s.id, { pts, turn: turning(pts, s.closed), closed: s.closed }];
 }));
 
-/* Curva de puntaje, calibrada contra trazos simulados con distorsión de mano:
-   d≈0.30 (buen pulso) → ~90 · d≈0.45 → ~72 · d≈0.70 → ~44 · d≈1.0 → ~11 */
-const D_PERFECT = 0.20;
-const D_ZERO = 1.10;
+/* Curva de puntaje, calibrada contra trazos simulados con distorsión de mano
+   (ruido, lag del filtro, inclinación, arco incompleto):
+   d≈0.25 (pulso normal) → ~95 · d≈0.45 → ~78 · d≈0.70 → ~52 · d≈1.0 → ~26 */
+const D_PERFECT = 0.25;
+const D_ZERO = 1.15;
 
 /** Puntaje 0-100 de un trazo YA normalizado (N puntos) contra una figura. */
 export function scoreNormalized(A, shapeId) {
