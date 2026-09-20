@@ -87,6 +87,16 @@ flowchart TD
     F --> G[puntaje 0-100]
 ```
 
+El modelo entrega **21 landmarks por mano**: cada uno es un punto `(x, y, z)` de una articulación del esqueleto de tu mano, medido en la imagen en tiempo real.
+
+![Los 21 landmarks de MediaPipe: numerados, con nombre y conexiones](docs/assets/hand-landmarks.png)
+
+Los sufijos te dicen dónde está cada punto: **MCP** es el nudillo, **PIP** la primera falange, **DIP** la segunda y **TIP** la punta del dedo. Con esos 21 puntos el juego hace todo:
+
+- **`8` (INDEX_FINGER_TIP)** es el cursor: la punta con la que dibujás.
+- El gesto se clasifica con **geometría entre puntos** — por ejemplo, "dedo extendido" se decide comparando la distancia radial de cada dedo contra la **muñeca `0`** (invariante a rotación), no comparando alturas.
+- **✌️ listo** = índice `8` y medio `12` extendidos con el resto doblado; **🖐️ borrar** = las cuatro puntas (`8`, `12`, `16`, `20`) extendidas; **👍 reiniciar** = pulgar `4` por encima de la muñeca `0`.
+
 **Tres decisiones que vale la pena destacar:**
 
 **1. One-Euro Filter.** Los landmarks tiemblan frame a frame y el trazo sale como un electrocardiograma. Una media móvil lo suaviza pero mete lag. El [One-Euro Filter](https://gery.casiez.net/1euro/) adapta su suavizado a la velocidad del dedo: filtra fuerte cuando te mueves lento, responde rápido cuando aceleras.
