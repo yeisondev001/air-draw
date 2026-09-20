@@ -384,7 +384,7 @@ const maskCtx = maskCanvas.getContext("2d", { willReadFrequently: true });
 function frameParaDetector() {
   maskCtx.drawImage(video, 0, 0, W, H);
   maskCtx.fillStyle = "#000";
-  maskCtx.fillRect(0, 0, W, H * 0.38);   // tira negra arriba = no se ve la cara
+  maskCtx.fillRect(0, 0, W, H * 0.22);   // tira negra arriba: solo donde suele estar la cara
   return maskCanvas.transferToImageBitmap();
 }
 
@@ -415,7 +415,7 @@ function loop(t) {
     // Si la muñeca entra en la zona enmascarada (top 42%), los landmarks
     // son basura: mejor no clasificar que inventar gestos.
     let g = "idle";
-    if (lm[0].y > 0.42) {
+    if (lm[0].y > 0.25) {
       const i = up(lm,8,6), m = up(lm,12,10);
       const nUp = [i, m, up(lm,16,14), up(lm,20,18)].filter(Boolean).length;
       if (nUp >= 4)       g = "clear";
@@ -566,11 +566,9 @@ async function boot() {
   const make = delegate => HandLandmarker.createFromOptions(fileset, {
     baseOptions: { modelAssetPath: MODEL_URL, delegate },
     runningMode: "VIDEO", numHands: 1,
-    // Confianza alta: 0.5 era demasiado permisivo combinado con la mascara
-    // del 38% superior (aparecian manos donde no las habia). 0.6 es mas estricto.
-    minHandDetectionConfidence: 0.6,
-    minHandPresenceConfidence: 0.6,
-    minTrackingConfidence: 0.6,
+    minHandDetectionConfidence: 0.5,
+    minHandPresenceConfidence: 0.5,
+    minTrackingConfidence: 0.5,
   });
   try { landmarker = await make("GPU"); }
   catch { landmarker = await make("CPU"); }

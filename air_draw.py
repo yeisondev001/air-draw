@@ -328,11 +328,9 @@ def main():
                     model_asset_path=ensure_model(), delegate=delegate),
                 running_mode=vision.RunningMode.VIDEO,
                 num_hands=1,
-                # Confianza alta: 0.5 era muy permisivo combinado con la mascara
-                # del 38% superior (aparecian manos donde no las habia).
-                min_hand_detection_confidence=0.6,
-                min_hand_presence_confidence=0.6,
-                min_tracking_confidence=0.6,
+                min_hand_detection_confidence=0.5,
+                min_hand_presence_confidence=0.5,
+                min_tracking_confidence=0.5,
             ))
 
     try:
@@ -357,7 +355,7 @@ def main():
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         # Tira negra arriba para que el detector no confunda la cara con la mano
         # cuando están cerca. El landmarker deja de "ver" esa region.
-        rgb[:int(H * 0.38), :] = 0
+        rgb[:int(H * 0.22), :] = 0
         mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         res = landmarker.detect_for_video(mp_img, int((now - t0) * 1000))
 
@@ -372,7 +370,7 @@ def main():
             lm = res.hand_landmarks[0]
             # Muñeca en la zona enmascarada (top 38%) = landmarks basura,
             # no clasificamos para no inventar gestos en una mano recortada.
-            if lm[0].y > 0.40:
+            if lm[0].y > 0.25:
                 idx = finger_up(lm, 8, 6)
                 mid = finger_up(lm, 12, 10)
                 n_up = sum((idx, mid, finger_up(lm, 16, 14), finger_up(lm, 20, 18)))
