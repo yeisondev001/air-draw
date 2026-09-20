@@ -370,10 +370,21 @@ async function endGame() {
 
 /** Bucle chico para la pantalla final: detecta 👍 sostenido ~0.4 s y reinicia.
     Corre aparte porque el loop principal se detiene cuando termina el juego. */
+// MediaPipe confunde la mano con la cara cuando están cerca. Para evitarlo
+// enmascaramos el tercio superior del frame antes de mandárselo al detector.
+const maskCanvas = new OffscreenCanvas(W, H);
+const maskCtx = maskCanvas.getContext("2d", { willReadFrequently: true });
+function frameParaDetector() {
+  maskCtx.drawImage(video, 0, 0, W, H);
+  maskCtx.fillStyle = "#000";
+  maskCtx.fillRect(0, 0, W, H * 0.38);   // tira negra arriba = no se ve la cara
+  return maskCanvas.transferToImageBitmap();
+}
+
 function endWatch(t) {
   requestAnimationFrame(endWatch);
   if (!watchEnd || running || !landmarker || video.readyState < 2) return;
-  const res = landmarker.detectForVideo(video, t);
+  const res = landmarker.detectForVideo(frameParaDetector(), t);
   if (res.landmarks?.length && thumbsUp(res.landmarks[0])) {
     if (++endHold >= 10) { watchEnd = false; endHold = 0; startGame(); requestAnimationFrame(loop); }
   } else endHold = 0;
@@ -391,7 +402,7 @@ function loop(t) {
   if (shape) drawGhost(shape);
 
   let tip = null;
-  const res = landmarker.detectForVideo(video, t);
+  const res = landmarker.detectForVideo(frameParaDetector(), t);
   if (res.landmarks && res.landmarks.length) {
     const lm = res.landmarks[0];
     const i = up(lm,8,6), m = up(lm,12,10);

@@ -312,6 +312,16 @@ let fpsT = performance.now(), fpsN = 0;
 const video = document.createElement("video");
 video.playsInline = true; video.muted = true; video.autoplay = true;
 
+// Tira negra arriba para que el detector no confunda tu cara con la mano.
+const maskCanvas = new OffscreenCanvas(W, H);
+const maskCtx = maskCanvas.getContext("2d", { willReadFrequently: true });
+function frameParaDetector(){
+  maskCtx.drawImage(video, 0, 0, W, H);
+  maskCtx.fillStyle = "#000";
+  maskCtx.fillRect(0, 0, W, H * 0.38);
+  return maskCanvas.transferToImageBitmap();
+}
+
 const up = (lm,t,p) => lm[t].y < lm[p].y - 0.015;
 /** 👍: los otros cuatro dedos doblados y el pulgar claramente por encima de la muñeca. */
 const thumbsUp = lm => !up(lm,8,6) && !up(lm,12,10) && !up(lm,16,14) && !up(lm,20,18)
@@ -376,7 +386,7 @@ function endGame(){
 function endWatch(t){
   requestAnimationFrame(endWatch);
   if(!watchEnd || running || !landmarker || video.readyState < 2) return;
-  const res = landmarker.detectForVideo(video, t);
+  const res = landmarker.detectForVideo(frameParaDetector(), t);
   if(res.landmarks?.length && thumbsUp(res.landmarks[0])){
     if(++endHold >= 10){ watchEnd = false; endHold = 0; startGame(); requestAnimationFrame(loop); }
   } else endHold = 0;
@@ -394,7 +404,7 @@ function loop(t){
   if(shape) drawGhost(shape);
 
   let tip = null;
-  const res = landmarker.detectForVideo(video, t);
+  const res = landmarker.detectForVideo(frameParaDetector(), t);
   if(res.landmarks && res.landmarks.length){
     const lm = res.landmarks[0];
     const i=up(lm,8,6), m=up(lm,12,10), r=up(lm,16,14), p=up(lm,20,18);

@@ -346,6 +346,9 @@ def main():
         now = time.time()
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        # Tira negra arriba para que el detector no confunda la cara con la mano
+        # cuando están cerca. El landmarker deja de "ver" esa region.
+        rgb[:int(H * 0.38), :] = 0
         mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         res = landmarker.detect_for_video(mp_img, int((now - t0) * 1000))
 
