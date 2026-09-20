@@ -261,7 +261,7 @@ class Game:
 AUTO_MS = 1.0   # pausa (en segundos) que activa el cierre automatico
 
 
-BONES = [(0, 5), (5, 8), (0, 9), (9, 12), (0, 13), (13, 16), (0, 17), (17, 20), (0, 1), (1, 4)]
+BONES = [(0, 5), (5, 7), (0, 9), (9, 12), (0, 13), (13, 16), (0, 17), (17, 20), (0, 1), (1, 4)]
 
 
 def finger_up(lm, tip: int, pip: int) -> bool:
@@ -395,11 +395,14 @@ def main():
                 g.pending, g.hold = gesture, 0
 
             # Comprimir el area de dibujo a la zona donde la camara lee bien.
-        # La webcam pierde tracking en los bordes: mapeamos [0.22, 0.82] -> [0, H]
-        # para que tu mano pueda moverse tranquila en el medio.
-        y_min, y_max = 0.22, 0.82
-        y_norm = max(0.0, min(1.0, (lm[8].y - y_min) / (y_max - y_min)))
-        tip = (fx.filter(lm[8].x * W, now), fy.filter(y_norm * H, now))
+            # La webcam pierde tracking en los bordes: mapeamos [0.22, 0.82] -> [0, H]
+            # para que tu mano pueda moverse tranquila en el medio.
+            y_min, y_max = 0.22, 0.82
+            # Usamos el DIP (lm[7]) en vez de la punta (lm[8]): cuando el dedo
+            # apunta a la camara, la punta se proyecta arriba de donde el ojo ve
+            # el dedo. El DIP cae justo donde vos percibis la "punta".
+            y_norm = max(0.0, min(1.0, (lm[7].y - y_min) / (y_max - y_min)))
+            tip = (fx.filter(lm[7].x * W, now), fy.filter(y_norm * H, now))
 
             for a, b in BONES:
                 cv2.line(canvas,

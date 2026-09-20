@@ -317,7 +317,7 @@ const up = (lm, t, p) => {
 /** 👍: los otros cuatro dedos doblados y el pulgar claramente por encima de la muñeca. */
 const thumbsUp = lm => !up(lm,8,6) && !up(lm,12,10) && !up(lm,16,14) && !up(lm,20,18)
   && lm[4].y < lm[0].y - 0.06;
-const BONES = [[0,5],[5,8],[0,9],[9,12],[0,13],[13,16],[0,17],[17,20],[0,1],[1,4]];
+const BONES = [[0,5],[5,7],[0,9],[9,12],[0,13],[13,16],[0,17],[17,20],[0,1],[1,4]];
 
 const GHOSTS = new Map(SHAPES.map(s => [s.id, normalize(resample(s.pts, 200, s.closed))]));
 
@@ -430,8 +430,11 @@ function loop(t) {
     // La webcam pierde tracking en los bordes: mapeamos [0.22, 0.82] -> [0, H]
     // para que tu mano pueda moverse tranquila en el medio.
     const yMin = 0.22, yMax = 0.82;
-    const yNorm = Math.max(0, Math.min(1, (lm[8].y - yMin) / (yMax - yMin)));
-    tip = { x: (1 - lm[8].x) * W, y: yNorm * H };
+    // Usamos el DIP (lm[7]) en vez de la punta (lm[8]): cuando el dedo
+    // apunta a la camara, la punta se proyecta arriba de donde el ojo ve
+    // el dedo. El DIP cae justo donde vos percibis la "punta".
+    const yNorm = Math.max(0, Math.min(1, (lm[7].y - yMin) / (yMax - yMin)));
+    tip = { x: (1 - lm[7].x) * W, y: yNorm * H };
     tip.x = fx.filter(tip.x, t); tip.y = fy.filter(tip.y, t);
 
     ctx.strokeStyle = "rgba(96,165,250,.40)"; ctx.lineWidth = 2;
