@@ -476,6 +476,12 @@ function loop(t) {
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/" +
                   "hand_landmarker/float16/1/hand_landmarker.task";
 
+// Precarga en paralelo: el wasm (~10 MB) y el modelo (~7.5 MB) empiezan a
+// bajarse NI BIEN abre la página, mientras el usuario escribe su nick.
+// Sin esto, todo se baja recién al apretar Jugar y espera de more.
+const libWarm = import(V).catch(() => null);
+const modelWarm = fetch(MODEL_URL).catch(() => null);   // calienta el cache HTTP
+
 async function boot() {
   const st = $("status");
 
@@ -493,7 +499,7 @@ async function boot() {
 
   // 2) El modelo. Si el dispositivo no puede con WebGL, cae a CPU.
   st.textContent = "Descargando modelo…";
-  const { HandLandmarker, FilesetResolver } = await import(V);
+  const { HandLandmarker, FilesetResolver } = await (libWarm ?? import(V));
   const fileset = await FilesetResolver.forVisionTasks(V + "/wasm");
   const make = delegate => HandLandmarker.createFromOptions(fileset, {
     baseOptions: { modelAssetPath: MODEL_URL, delegate },
@@ -520,6 +526,8 @@ function friendlyError(e) {
     return "No se encontró ninguna cámara en este dispositivo.";
   if (n === "NotReadableError")
     return "Otra app está usando la cámara. Cerrala y recargá.";
+  if (/timeout|video source|start video/i.test(e?.message || ""))
+    return "La cámara no respondió a tiempo: suele ser otra app tomándola (¿el juego de escritorio?). Cerrala y recargá.";
   return e?.message || String(e);
 }
 
