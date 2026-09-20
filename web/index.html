@@ -310,6 +310,7 @@ const strokeLen = a => { let l = 0; for (let i = 1; i < a.length; i++) l += dist
 let audioCtx = null;
 function beep(freq, t0, dur, type = "sine", gain = 0.15) {
   const a = audioCtx || (audioCtx = new (window.AudioContext || window.webkitAudioContext)());
+  if (a.state === "suspended") a.resume().catch(() => {});
   const o = a.createOscillator(), g = a.createGain();
   o.type = type; o.frequency.value = freq;
   o.connect(g); g.connect(a.destination);
@@ -334,6 +335,7 @@ let drawOsc = null, drawGain = null;
 function initAudio() {
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();   // iOS lo arranca suspendido
     drawOsc = audioCtx.createOscillator();
     drawGain = audioCtx.createGain();
     drawOsc.type = "triangle";
@@ -656,9 +658,10 @@ $("btnPlay").addEventListener("click", async () => {
   if (!nick) { $("err").textContent = "Poné un nick para jugar: es con el que entrás al ranking."; return; }
   $("btnPlay").disabled = true;
   $("err").textContent = "";
+  initAudio();   // ANTES de cualquier await: iOS Safari corta el "gesto de
+                 // usuario" tras el primer await y el AudioContext nace mudo
   try {
     if (!landmarker || !video.srcObject) await boot();
-    initAudio();   // el AudioContext necesita este gesto de usuario
     startGame();
     requestAnimationFrame(loop);
   } catch (e) {
