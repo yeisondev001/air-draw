@@ -492,9 +492,23 @@ async function boot() {
     throw new Error("Este navegador no da acceso a la cámara. Probá con Chrome o Safari.");
   }
   st.textContent = "Pidiendo cámara…";
-  video.srcObject = await navigator.mediaDevices.getUserMedia({
+  // Reintento: 'Timeout starting video source' suele ser transitorio (la
+  // cámara queda pegada un momento tras liberarse de otra app). Probamos
+  // 3 veces con una espera corta antes de rendirnos.
+  const pedirCamara = () => navigator.mediaDevices.getUserMedia({
     video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, audio: false
   });
+  for (let intento = 1; ; intento++) {
+    try {
+      video.srcObject = await pedirCamara();
+      break;
+    } catch (e) {
+      const retry = intento < 3 && /timeout|notreadable|abort/i.test((e?.name || "") + " " + (e?.message || ""));
+      if (!retry) throw e;
+      st.textContent = `La cámara está demorando… intento ${intento} de 3`;
+      await new Promise(r => setTimeout(r, 800));
+    }
+  }
   await video.play();
 
   // 2) El modelo. Si el dispositivo no puede con WebGL, cae a CPU.
