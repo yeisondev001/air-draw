@@ -87,25 +87,19 @@ flowchart TD
     F --> G[puntaje 0-100]
 ```
 
-El modelo entrega **21 landmarks por mano**: cada uno es un punto `(x, y, z)` de una articulación del esqueleto de tu mano, medido en la imagen en tiempo real.
+El modelo entrega **21 landmarks por mano**: un punto `(x, y, z)` por cada articulación, en tiempo real.
 
 ![Los 21 landmarks de MediaPipe: numerados, con nombre y conexiones](docs/assets/hand-landmarks.png)
 
-Los sufijos te dicen dónde está cada punto: **MCP** es el nudillo, **PIP** la primera falange, **DIP** la segunda y **TIP** la punta del dedo. Con esos 21 puntos el juego hace todo:
+El juego vive de esos números: el cursor es la **punta del índice `8`**, los gestos son geometría entre puntos contra la **muñeca `0`** (invariante a la rotación), y MCP / PIP / DIP / TIP van del nudillo a la punta.
 
-- **`8` (INDEX_FINGER_TIP)** es el cursor: la punta con la que dibujás.
-- El gesto se clasifica con **geometría entre puntos** — por ejemplo, "dedo extendido" se decide comparando la distancia radial de cada dedo contra la **muñeca `0`** (invariante a rotación), no comparando alturas.
-- **✌️ listo** = índice `8` y medio `12` extendidos con el resto doblado; **🖐️ borrar** = las cuatro puntas (`8`, `12`, `16`, `20`) extendidas; **👍 reiniciar** = pulgar `4` por encima de la muñeca `0`.
+**Tres decisiones del diseño:**
 
-**Tres decisiones que vale la pena destacar:**
-
-**1. One-Euro Filter.** Los landmarks tiemblan frame a frame y el trazo sale como un electrocardiograma. Una media móvil lo suaviza pero mete lag. El [One-Euro Filter](https://gery.casiez.net/1euro/) adapta su suavizado a la velocidad del dedo: filtra fuerte cuando te mueves lento, responde rápido cuando aceleras.
-
-**2. Histéresis en los gestos.** Un gesto tiene que mantenerse 3 frames seguidos antes de activarse. Sin esto, la detección parpadea entre "dibujar" y "terminar" y te corta el trazo a la mitad.
-
-**3. Puntaje sin machine learning.** Las figuras son curvas paramétricas — la flor es una *curva rosa*, `r = cos(2·θ)`, que da exactamente 4 pétalos. Para comparar se usa un enfoque tipo [$1 Unistroke Recognizer](https://depts.washington.edu/acelab/proj/dollar/index.html): se remuestrean ambos trazos a 64 puntos equidistantes, se normalizan a centroide y escala común, y se mide la distancia media punto a punto probando todos los puntos de inicio y ambos sentidos de giro.
-
-A eso se le suma un **término de curvatura**: el ángulo de giro en cada punto, medido sobre una ventana de ±4 puntos para que el temblor de la mano no domine la señal. Un círculo da giros chicos y uniformes; un triángulo, tres picos grandes. Sin esto, un círculo puntuaba 77 sobre 100 como "triángulo". Resultado determinista, sin dataset, sin entrenamiento.
+| Decisión | Por qué |
+|---|---|
+| **One-Euro Filter** | los landmarks tiemblan: filtra fuerte al moverse lento, rápido al acelerar — suavidad sin lag |
+| **Histéresis de gestos** | 3 frames seguidos antes de activar un gesto: sin esto la detección parpadea y corta el trazo |
+| **Puntaje sin ML** | geometría tipo [$1 Unistroke](https://depts.washington.edu/acelab/proj/dollar/index.html): 64 puntos, normalización, distancia punto a punto + término de curvatura. Un círculo daba 77/100 como "triángulo"; con curvatura, ~51. Determinista, sin dataset |
 
 ---
 
