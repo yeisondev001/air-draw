@@ -265,7 +265,15 @@ BONES = [(0, 5), (5, 8), (0, 9), (9, 12), (0, 13), (13, 16), (0, 17), (17, 20), 
 
 
 def finger_up(lm, tip: int, pip: int) -> bool:
-    return lm[tip].y < lm[pip].y - 0.015
+    """Dedo extendido: distancia de la punta a la muñeca mayor que la del PIP.
+
+    La versión vieja (tip.y < pip.y) falla con la mano inclinada: este test
+    es invariante a la rotación, así que no confunde una mano de canto con
+    los dedos abiertos.
+    """
+    dx, dy = lm[tip].x - lm[0].x, lm[tip].y - lm[0].y
+    px, py = lm[pip].x - lm[0].x, lm[pip].y - lm[0].y
+    return dx * dx + dy * dy > (px * px + py * py) * 1.25
 
 
 def thumbs_up(lm) -> bool:
@@ -362,16 +370,21 @@ def main():
         tip = None
         if res.hand_landmarks:
             lm = res.hand_landmarks[0]
-            idx = finger_up(lm, 8, 6)
-            mid = finger_up(lm, 12, 10)
-            n_up = sum((idx, mid, finger_up(lm, 16, 14), finger_up(lm, 20, 18)))
+            # Muñeca en la zona enmascarada (top 38%) = landmarks basura,
+            # no clasificamos para no inventar gestos en una mano recortada.
+            if lm[0].y > 0.40:
+                idx = finger_up(lm, 8, 6)
+                mid = finger_up(lm, 12, 10)
+                n_up = sum((idx, mid, finger_up(lm, 16, 14), finger_up(lm, 20, 18)))
 
-            if n_up >= 4:
-                gesture = "clear"
-            elif idx and mid:
-                gesture = "done"
-            elif idx and not mid:
-                gesture = "draw"
+                if n_up >= 4:
+                    gesture = "clear"
+                elif idx and mid:
+                    gesture = "done"
+                elif idx and not mid:
+                    gesture = "draw"
+                else:
+                    gesture = "idle"
             else:
                 gesture = "idle"
 

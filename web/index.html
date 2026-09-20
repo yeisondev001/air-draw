@@ -307,7 +307,13 @@ let fpsT = performance.now(), fpsN = 0;
 const video = document.createElement("video");
 video.playsInline = true; video.muted = true; video.autoplay = true;
 
-const up = (lm, t, p) => lm[t].y < lm[p].y - 0.015;
+/** Dedo extendido: prueba radial contra la muñeca, rotación-invariante.
+    La versión vieja (tip.y < pip.y) fallaba con la mano inclinada. */
+const up = (lm, t, p) => {
+  const dx = lm[t].x - lm[0].x, dy = lm[t].y - lm[0].y;
+  const px = lm[p].x - lm[0].x, py = lm[p].y - lm[0].y;
+  return dx * dx + dy * dy > (px * px + py * py) * 1.25;
+};
 /** 👍: los otros cuatro dedos doblados y el pulgar claramente por encima de la muñeca. */
 const thumbsUp = lm => !up(lm,8,6) && !up(lm,12,10) && !up(lm,16,14) && !up(lm,20,18)
   && lm[4].y < lm[0].y - 0.06;
@@ -406,13 +412,16 @@ function loop(t) {
   const res = landmarker.detectForVideo(frameParaDetector(), t);
   if (res.landmarks && res.landmarks.length) {
     const lm = res.landmarks[0];
-    const i = up(lm,8,6), m = up(lm,12,10);
-    const nUp = [i, m, up(lm,16,14), up(lm,20,18)].filter(Boolean).length;
-
+    // Si la muñeca entra en la zona enmascarada (top 42%), los landmarks
+    // son basura: mejor no clasificar que inventar gestos.
     let g = "idle";
-    if (nUp >= 4)       g = "clear";
-    else if (i && m)    g = "done";
-    else if (i && !m)   g = "draw";
+    if (lm[0].y > 0.42) {
+      const i = up(lm,8,6), m = up(lm,12,10);
+      const nUp = [i, m, up(lm,16,14), up(lm,20,18)].filter(Boolean).length;
+      if (nUp >= 4)       g = "clear";
+      else if (i && m)    g = "done";
+      else if (i && !m)   g = "draw";
+    }
 
     // Histéresis: 3 frames seguidos antes de cambiar de gesto.
     if (g === pending) { if (++hold >= 3) mode = g; } else { pending = g; hold = 0; }
