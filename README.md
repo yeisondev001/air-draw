@@ -50,18 +50,41 @@ La figura objetivo aparece punteada en pantalla como guía. Dibujas encima, cier
 
 ---
 
+## 🗺️ Flujo de la aplicación
+
+```mermaid
+flowchart TD
+    A[👋 Abrir la app] --> B{¿Dónde?}
+    B -->|Navegador| C[Escribir nick · entrar]
+    B -->|Escritorio| C
+    C --> D[Cámara activa · 21 landmarks por frame]
+    D --> E{Clasificador de gesto}
+    E -->|☝️ solo índice| F[✏️ Dibujar · punta filtrada]
+    E -->|🖐️ palma abierta| G[🧹 Borrar trazo]
+    E -->|✌️ índice + medio<br/>o dedo quieto 1 s| H[✔️ Cerrar trazo]
+    F --> E
+    G --> F
+    H --> I[Puntuación: geometría contra la plantilla]
+    I --> J[Puntaje 0-100 + sonido]
+    J --> K{¿Quedan figuras?}
+    K -->|sí · figura 2 a 5| E
+    K -->|no| L[🏆 Pantalla final · ranking]
+    L --> M[📸 Tarjeta con el puntaje para compartir]
+    L -->|👍 pulgar arriba sostenido| E
+```
+
+---
+
 ## 🧠 Cómo funciona
 
-```
-cámara → MediaPipe Hands → 21 landmarks de la mano
-             ↓
-    clasificador de gesto (geometría entre landmarks, sin ML)
-             ↓
-   punta del índice → One-Euro Filter → trazo suave
-             ↓
-        remuestrear → normalizar → comparar con la plantilla
-             ↓
-                  puntaje 0-100
+```mermaid
+flowchart TD
+    A[cámara] --> B[MediaPipe Hands<br/>21 landmarks de la mano]
+    B --> C[clasificador de gesto<br/>geometría entre landmarks · sin ML]
+    C --> D[punta del índice]
+    D --> E[One-Euro Filter<br/>trazo suave sin lag]
+    E --> F[remuestrear → normalizar<br/>→ comparar con la plantilla]
+    F --> G[puntaje 0-100]
 ```
 
 **Tres decisiones que vale la pena destacar:**
@@ -95,6 +118,33 @@ Hay dos versiones del mismo juego, con el mismo motor de puntuación:
 - **Upstash Redis** — el ranking global (el servidor recalcula el puntaje: editar el score en devtools no sirve)
 
 El motor (`web/scoring.js`) es JavaScript puro y compartido entre cliente y servidor — y tiene tests (`node --test tests/`, corren en el CI).
+
+---
+
+## 🏗️ Arquitectura
+
+Dos versiones, el mismo motor de puntuación. La privacidad está en el diseño: la cámara vive en el cliente, **ningún frame de video viaja a ningún servidor** — lo único que viaja es el puntaje, y aun así el servidor lo recalcula para no fiarse del cliente.
+
+```mermaid
+flowchart LR
+    subgraph WEB [🌐 Navegador — todo el vision corre local]
+        CAM[Cámara] -->|frames| MP[MediaPipe Hand Landmarker<br/>WASM]
+        MP -->|21 landmarks| JUEGO[index.html<br/>gestos · trazo · render Canvas]
+        JUEGO --> MOTOR[scoring.js<br/>puntaje 0-100]
+    end
+
+    subgraph NUBE [☁️ Solo el ranking]
+        MOTOR -->|POST /api/scores<br/>nick + puntos normalizados| API[api/scores.js<br/>Vercel serverless]
+        API -->|re-puntúa con<br/>el mismo scoring.js| RDB[(Upstash Redis<br/>ranking global)]
+        API -->|rank · récords| JUEGO
+    end
+
+    subgraph ESCRITORIO [🖥️ Python — sin servidores]
+        CAM2[Cámara] --> CV[OpenCV · captura y render]
+        CV --> MPY[MediaPipe Tasks Python]
+        MPY --> PY[scoring NumPy · misma geometría]
+    end
+```
 
 ---
 
