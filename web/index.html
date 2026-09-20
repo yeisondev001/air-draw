@@ -495,9 +495,21 @@ async function boot() {
   // Reintento: 'Timeout starting video source' suele ser transitorio (la
   // cámara queda pegada un momento tras liberarse de otra app). Probamos
   // 3 veces con una espera corta antes de rendirnos.
-  const pedirCamara = () => navigator.mediaDevices.getUserMedia({
-    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, audio: false
-  });
+  const pedirCamara = async () => {
+    let video = { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" };
+    // laptops con utilidades traen cámaras fantasma: si ya nos dieron permiso
+    // podemos leer los nombres y elegir una real ("Integrated/Webcam"),
+    // descartando las virtuales que arrancan con timeout.
+    try {
+      const devs = (await navigator.mediaDevices.enumerateDevices())
+        .filter(d => d.kind === "videoinput" && d.label);
+      const real = devs => devs.find(d => /integrated|internal/i.test(d.label)) ||
+                           devs.find(d => /webcam|camera/i.test(d.label) && !/virtual|epson|many|droid|ir\b/i.test(d.label));
+      const elegida = real(devs);
+      if (elegida) video = { ...video, deviceId: { exact: elegida.deviceId } };
+    } catch {}
+    return navigator.mediaDevices.getUserMedia({ video, audio: false });
+  };
   for (let intento = 1; ; intento++) {
     try {
       video.srcObject = await pedirCamara();
