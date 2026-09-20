@@ -307,6 +307,7 @@ let round = 0, total = 0, nick = "";
 let stroke = [], lastStroke = [], mode = "idle", pending = "idle", hold = 0;
 let watchEnd = false, endHold = 0;   // 👍 en la pantalla final
 let flash = 0, flashScore = 0, lockUntil = 0;
+let flashHold = 0;
 let fpsT = performance.now(), fpsN = 0;
 
 const video = document.createElement("video");
@@ -439,11 +440,11 @@ function loop(t){
     } else if(mode === "done" && stroke.length){
       const s = scoreStroke(stroke, shape);
       if(s !== null){
-        total += s; flashScore = s; flash = 1;
-        setCard("cTotal", total);
-        lastStroke = stroke; stroke = [];
-        lockUntil = t + 1700;
-        setTimeout(nextRound, 1700);
+    total += s; flashScore = s; flash = 1; flashHold = 50;
+    setCard("cTotal", total);
+    lastStroke = stroke; stroke = [];
+    lockUntil = t + 1700;
+    setTimeout(nextRound, 1700);
       } else {
         stroke = [];   // trazo inválido: no puntúa, reintenta
       }
@@ -471,7 +472,9 @@ function loop(t){
     ctx.fillStyle = flashScore >= 70 ? "#4ade80" : flashScore >= 40 ? "#fbbf24" : "#f87171";
     ctx.font = "800 76px ui-sans-serif,system-ui,sans-serif";
     ctx.fillText(flashScore, W/2, H/2 + 26);
-    ctx.globalAlpha = 1; flash -= 0.010;
+    if (flashHold > 0) flashHold--; else { ctx.globalAlpha = flash; flash -= 0.008; }
+    if (flashHold === 0 && flash <= 0) flash = 0;
+    ctx.globalAlpha = 1;
   }
 
   const labels = { draw:"✏️ dibujar", done:"✌️ listo", clear:"🖐️ borrar", idle:"—" };

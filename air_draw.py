@@ -253,6 +253,7 @@ class Game:
     hold: int = 0
     flash: float = 0.0
     flash_score: int = 0
+    flash_hold: int = 0   # el puntaje queda fijo un instante antes de desvanecerse
     lock_until: float = 0.0
     done: bool = False
     thumb_hold: int = 0
@@ -421,7 +422,7 @@ def main():
                 s = score_stroke(g.stroke, shape)
                 if s is not None:
                     g.total += s
-                    g.flash, g.flash_score = 1.0, s
+                    g.flash, g.flash_score, g.flash_hold = 1.0, s, 50   # ~1.6 s a tamaño completo
                     g.last_stroke, g.stroke = g.stroke, []
                     g.lock_until = now + 1.7
                     if g.round >= len(SHAPES):
@@ -459,7 +460,10 @@ def main():
         if g.flash > 0:
             col = GREEN if g.flash_score >= 70 else (GOLD if g.flash_score >= 40 else RED)
             text(canvas, str(g.flash_score), (W // 2, H // 2 + 30), 3.4, col, 6, center=True)
-            g.flash -= 0.02
+            if g.flash_hold > 0:
+                g.flash_hold -= 1
+            else:
+                g.flash -= 0.008
 
         if g.done and g.flash <= 0:
             cv2.rectangle(canvas, (0, H // 2 - 110), (W, H // 2 + 90), PANEL, -1)

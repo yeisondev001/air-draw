@@ -295,6 +295,7 @@ let landmarker = null, running = false;
 let round = 0, total = 0, nick = "", rounds = [];
 let stroke = [], lastStroke = [], mode = "idle", pending = "idle", hold = 0;
 let flash = 0, flashScore = 0, lockUntil = 0;
+let flashHold = 0;   // el numero del puntaje queda fijo un instante y luego se desvanece
 let watchEnd = false, endHold = 0;   // 👍 en la pantalla final
 let lastDrawT = 0;                   // cierre automático: dedo quieto = trazo listo
 const AUTO_MS = 1000;                // pausa que activa el cierre
@@ -459,6 +460,7 @@ function loop(t) {
         rounds.push({ shapeId: shape.id, points: r.normalized.map(p => [p.x, p.y]) });
         lastStroke = stroke; stroke = [];
         lockUntil = t + 1700;
+        flashHold = 50;                         // ~1.6 s a tamaño completo antes de empezar a desvanecerse
         setTimeout(nextRound, 1700);
       } else stroke = [];
     }
@@ -484,7 +486,9 @@ function loop(t) {
     ctx.fillStyle = flashScore >= 70 ? "#4ade80" : flashScore >= 40 ? "#fbbf24" : "#f87171";
     ctx.font = "800 76px ui-sans-serif,system-ui,sans-serif";
     ctx.fillText(flashScore, W / 2, H / 2 + 26);
-    ctx.globalAlpha = 1; flash -= 0.010;
+    if (flashHold > 0) flashHold--; else { ctx.globalAlpha = flash; flash -= 0.008; }
+    if (flashHold === 0 && flash <= 0) flash = 0;
+    ctx.globalAlpha = 1;
   }
 
   setCard("cMode", { draw:"✏️ dibujar", done:"✌️ listo", clear:"🖐️ borrar", idle:"—" }[mode]);
