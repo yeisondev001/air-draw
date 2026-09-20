@@ -394,20 +394,23 @@ def main():
             else:
                 g.pending, g.hold = gesture, 0
 
-            # Comprimir el area de dibujo a la zona donde la camara lee bien.
-            # La webcam pierde tracking en los bordes: mapeamos [0.22, 0.82] -> [0, H]
-            # para que tu mano pueda moverse tranquila en el medio.
+            # Mapea un landmark del espacio de la camara al espacio del canvas.
+            # X: espejo (camara selfie). Y: comprime [y_min, y_max] a [0, H]
+            # para que el trazo use la zona donde la camara lee bien.
             y_min, y_max = 0.22, 0.82
-            # Usamos el DIP (lm[7]) en vez de la punta (lm[8]): cuando el dedo
-            # apunta a la camara, la punta se proyecta arriba de donde el ojo ve
-            # el dedo. El DIP cae justo donde vos percibis la "punta".
-            y_norm = max(0.0, min(1.0, (lm[7].y - y_min) / (y_max - y_min)))
-            tip = (fx.filter(lm[7].x * W, now), fy.filter(y_norm * H, now))
+            def P(i):
+                x = (1 - lm[i].x) * W
+                y = max(0.0, min(H, (lm[i].y - y_min) / (y_max - y_min) * H))
+                return (x, y)
 
+            # Cursor: nudillo DIP (lm[7]) - cae donde el ojo ve la punta del dedo.
+            tx, ty = P(7)
+            tip = (fx.filter(tx, now), fy.filter(ty, now))
+
+            # Huesos: mismo mapeo que el cursor, asi no se "separan".
             for a, b in BONES:
-                cv2.line(canvas,
-                         (int(lm[a].x * W), int(lm[a].y * H)),
-                         (int(lm[b].x * W), int(lm[b].y * H)),
+                ax, ay = P(a); bx, by = P(b)
+                cv2.line(canvas, (int(ax), int(ay)), (int(bx), int(by)),
                          (150, 110, 70), 2, cv2.LINE_AA)
         else:
             g.mode = "idle"

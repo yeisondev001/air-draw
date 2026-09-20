@@ -426,23 +426,21 @@ function loop(t) {
     // Histéresis: 3 frames seguidos antes de cambiar de gesto.
     if (g === pending) { if (++hold >= 3) mode = g; } else { pending = g; hold = 0; }
 
-    // Comprimir el area de dibujo a la zona donde la camara lee bien.
-    // La webcam pierde tracking en los bordes: mapeamos [0.22, 0.82] -> [0, H]
-    // para que tu mano pueda moverse tranquila en el medio.
+    // Mapea un landmark del espacio de la camara al espacio del canvas.
+    // X: espejo (camara selfie). Y: comprime [yMin, yMax] a [0, H] para que
+    // el trazo use la zona donde la camara lee bien.
     const yMin = 0.22, yMax = 0.82;
-    // Usamos el DIP (lm[7]) en vez de la punta (lm[8]): cuando el dedo
-    // apunta a la camara, la punta se proyecta arriba de donde el ojo ve
-    // el dedo. El DIP cae justo donde vos percibis la "punta".
-    const yNorm = Math.max(0, Math.min(1, (lm[7].y - yMin) / (yMax - yMin)));
-    tip = { x: (1 - lm[7].x) * W, y: yNorm * H };
+    const P = i => ({ x: (1 - lm[i].x) * W, y: Math.max(0, Math.min(H, (lm[i].y - yMin) / (yMax - yMin) * H)) });
+
+    // Cursor: nudillo DIP (lm[7]) - cae donde el ojo ve la punta del dedo.
+    tip = P(7);
     tip.x = fx.filter(tip.x, t); tip.y = fy.filter(tip.y, t);
 
+    // Huesos: mismo mapeo que el cursor, asi no se "separan".
     ctx.strokeStyle = "rgba(96,165,250,.40)"; ctx.lineWidth = 2;
     for (const [a, b] of BONES) {
-      ctx.beginPath();
-      ctx.moveTo((1 - lm[a].x) * W, lm[a].y * H);
-      ctx.lineTo((1 - lm[b].x) * W, lm[b].y * H);
-      ctx.stroke();
+      const A = P(a), B = P(b);
+      ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
     }
   } else { mode = "idle"; fx.reset(); fy.reset(); }
 
