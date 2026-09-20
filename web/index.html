@@ -317,7 +317,7 @@ const up = (lm, t, p) => {
 /** 👍: los otros cuatro dedos doblados y el pulgar claramente por encima de la muñeca. */
 const thumbsUp = lm => !up(lm,8,6) && !up(lm,12,10) && !up(lm,16,14) && !up(lm,20,18)
   && lm[4].y < lm[0].y - 0.06;
-const BONES = [[0,5],[5,7],[0,9],[9,11],[0,13],[13,15],[0,17],[17,19],[0,1],[1,3]];
+const BONES = [[0,5],[5,8],[0,9],[9,12],[0,13],[13,16],[0,17],[17,20],[0,1],[1,4]];
 
 const GHOSTS = new Map(SHAPES.map(s => [s.id, normalize(resample(s.pts, 200, s.closed))]));
 
@@ -426,17 +426,14 @@ function loop(t) {
     // Histéresis: 3 frames seguidos antes de cambiar de gesto.
     if (g === pending) { if (++hold >= 3) mode = g; } else { pending = g; hold = 0; }
 
-    // Mapea un landmark del espacio de la camara al espacio del canvas.
-    // X: espejo (camara selfie). Y: comprime [yMin, yMax] a [0, H] para que
-    // el trazo use la zona donde la camara lee bien.
-    const yMin = 0.22, yMax = 0.82;
-    const P = i => ({ x: (1 - lm[i].x) * W, y: Math.max(0, Math.min(H, (lm[i].y - yMin) / (yMax - yMin) * H)) });
+    // Un solo espacio de coordenadas: el video, los huesos, el cursor y el
+    // trazo usan las mismas cuentas, asi todo queda clavado sobre tu mano.
+    // (El remapeo de Y que hubo aca estiraba el esqueleto y lo corria del video.)
+    const P = i => ({ x: (1 - lm[i].x) * W, y: lm[i].y * H });
 
-    // Cursor: nudillo DIP (lm[7]) - cae donde el ojo ve la punta del dedo.
-    tip = P(7);
+    tip = P(8);
     tip.x = fx.filter(tip.x, t); tip.y = fy.filter(tip.y, t);
 
-    // Huesos: mismo mapeo que el cursor, asi no se "separan".
     ctx.strokeStyle = "rgba(96,165,250,.40)"; ctx.lineWidth = 2;
     for (const [a, b] of BONES) {
       const A = P(a), B = P(b);

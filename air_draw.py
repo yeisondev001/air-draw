@@ -261,7 +261,7 @@ class Game:
 AUTO_MS = 1.0   # pausa (en segundos) que activa el cierre automatico
 
 
-BONES = [(0, 5), (5, 7), (0, 9), (9, 11), (0, 13), (13, 15), (0, 17), (17, 19), (0, 1), (1, 3)]
+BONES = [(0, 5), (5, 8), (0, 9), (9, 12), (0, 13), (13, 16), (0, 17), (17, 20), (0, 1), (1, 4)]
 
 
 def finger_up(lm, tip: int, pip: int) -> bool:
@@ -394,20 +394,14 @@ def main():
             else:
                 g.pending, g.hold = gesture, 0
 
-            # Mapea un landmark del espacio de la camara al espacio del canvas.
-            # X: espejo (camara selfie). Y: comprime [y_min, y_max] a [0, H]
-            # para que el trazo use la zona donde la camara lee bien.
-            y_min, y_max = 0.22, 0.82
+            # Un solo espacio de coordenadas: video, huesos, cursor y trazo
+            # alineados sobre tu mano. (El remapeo de Y estiraba el esqueleto.)
             def P(i):
-                x = (1 - lm[i].x) * W
-                y = max(0.0, min(H, (lm[i].y - y_min) / (y_max - y_min) * H))
-                return (x, y)
+                return ((1 - lm[i].x) * W, lm[i].y * H)
 
-            # Cursor: nudillo DIP (lm[7]) - cae donde el ojo ve la punta del dedo.
-            tx, ty = P(7)
+            tx, ty = P(8)
             tip = (fx.filter(tx, now), fy.filter(ty, now))
 
-            # Huesos: mismo mapeo que el cursor, asi no se "separan".
             for a, b in BONES:
                 ax, ay = P(a); bx, by = P(b)
                 cv2.line(canvas, (int(ax), int(ay)), (int(bx), int(by)),
