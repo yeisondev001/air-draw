@@ -261,7 +261,7 @@ class Game:
 AUTO_MS = 1.0   # pausa (en segundos) que activa el cierre automatico
 
 
-BONES = [(0, 5), (5, 7), (0, 9), (9, 12), (0, 13), (13, 16), (0, 17), (17, 20), (0, 1), (1, 4)]
+BONES = [(0, 5), (5, 7), (0, 9), (9, 11), (0, 13), (13, 15), (0, 17), (17, 19), (0, 1), (1, 3)]
 
 
 def finger_up(lm, tip: int, pip: int) -> bool:

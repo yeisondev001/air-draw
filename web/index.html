@@ -317,7 +317,7 @@ const up = (lm, t, p) => {
 /** 👍: los otros cuatro dedos doblados y el pulgar claramente por encima de la muñeca. */
 const thumbsUp = lm => !up(lm,8,6) && !up(lm,12,10) && !up(lm,16,14) && !up(lm,20,18)
   && lm[4].y < lm[0].y - 0.06;
-const BONES = [[0,5],[5,7],[0,9],[9,12],[0,13],[13,16],[0,17],[17,20],[0,1],[1,4]];
+const BONES = [[0,5],[5,7],[0,9],[9,11],[0,13],[13,15],[0,17],[17,19],[0,1],[1,3]];
 
 const GHOSTS = new Map(SHAPES.map(s => [s.id, normalize(resample(s.pts, 200, s.closed))]));
 
