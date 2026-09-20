@@ -151,7 +151,7 @@
       </div>
     </div>
     <p id="err"></p>
-    <p class="hint">☝️ índice = dibujar · ✌️ índice+medio = cerrar trazo · 🖐️ palma = reintentar · 👍 en la pantalla final = jugar de nuevo</p>
+    <p class="hint">☝️ índice = dibujar · dejá el dedo quieto o ✌️ = cerrar trazo · 🖐️ palma = reintentar · 👍 en la pantalla final = jugar de nuevo</p>
   </main>
 
   <aside>
@@ -296,6 +296,11 @@ let round = 0, total = 0, nick = "", rounds = [];
 let stroke = [], lastStroke = [], mode = "idle", pending = "idle", hold = 0;
 let flash = 0, flashScore = 0, lockUntil = 0;
 let watchEnd = false, endHold = 0;   // 👍 en la pantalla final
+let lastDrawT = 0;                   // cierre automático: dedo quieto = trazo listo
+const AUTO_MS = 1000;                // pausa que activa el cierre
+const MIN_LEN = 170;                 // misma longitud mínima que el motor
+
+const strokeLen = a => { let l = 0; for (let i = 1; i < a.length; i++) l += dist(a[i - 1], a[i]); return l; };
 let fpsT = performance.now(), fpsN = 0;
 
 const video = document.createElement("video");
@@ -415,7 +420,18 @@ function loop(t) {
   if (t >= lockUntil) {
     if (mode === "draw" && tip) {
       const last = stroke[stroke.length - 1];
-      if (!last || dist(tip, last) > 2.5) stroke.push(tip);
+      if (!last || dist(tip, last) > 2.5) { stroke.push(tip); lastDrawT = t; }
+
+      // Cierre automático: si el dedo queda quieto ~1 s y el trazo ya sirve,
+      // se puntúa solo — sin que nadie tenga que saber el gesto de ✌️.
+      const pausa = (t - lastDrawT) / AUTO_MS;
+      if (stroke.length >= 18 && strokeLen(stroke) >= MIN_LEN && pausa > 0.05 && pausa < 1) {
+        ctx.beginPath();
+        ctx.strokeStyle = "rgba(251,191,36,.9)"; ctx.lineWidth = 4;
+        ctx.arc(tip.x, tip.y, 16, -Math.PI / 2, -Math.PI / 2 + pausa * TAU);
+        ctx.stroke();
+      }
+      if (pausa >= 1 && stroke.length >= 18 && strokeLen(stroke) >= MIN_LEN) mode = "done";
     } else if (mode === "done" && stroke.length) {
       const r = scoreStroke(stroke, shape);
       if (r) {

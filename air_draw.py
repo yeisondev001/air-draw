@@ -256,6 +256,8 @@ class Game:
     lock_until: float = 0.0
     done: bool = False
     thumb_hold: int = 0
+    last_draw_t: float = 0.0    # cierre automatico: dedo quieto = trazo listo
+AUTO_MS = 1.0   # pausa (en segundos) que activa el cierre automatico
 
 
 BONES = [(0, 5), (5, 8), (0, 9), (9, 12), (0, 13), (13, 16), (0, 17), (17, 20), (0, 1), (1, 4)]
@@ -404,6 +406,14 @@ def main():
             if g.mode == "draw" and tip:
                 if not g.stroke or math.dist(tip, g.stroke[-1]) > 2.5:
                     g.stroke.append(tip)
+                    g.last_draw_t = now
+
+                # Cierre automático: dedo quieto ~1 s con un trazo que ya
+                # sirve, sin que nadie tenga que saber el gesto de ✌️.
+                largo = sum(math.dist(a, b) for a, b in zip(g.stroke, g.stroke[1:]))
+                if (len(g.stroke) >= 18 and largo >= 0.24 * W
+                        and now - g.last_draw_t >= AUTO_MS):
+                    g.mode = "done"
             elif g.mode == "done" and g.stroke:
                 s = score_stroke(g.stroke, shape)
                 if s is not None:
@@ -426,6 +436,14 @@ def main():
         if tip:
             col = GREEN if g.mode == "draw" else (RED if g.mode == "clear" else BLUE)
             cv2.circle(canvas, (int(tip[0]), int(tip[1])), 9 if g.mode == "draw" else 6, col, -1, cv2.LINE_AA)
+
+            # Cuenta regresiva del cierre automático: arco dorado alrededor
+            # de la punta, para que el cierre no sorprenda.
+            if g.mode == "draw" and len(g.stroke) >= 18:
+                pausa = min(1.0, (now - g.last_draw_t) / AUTO_MS)
+                if pausa > 0.05:
+                    cv2.ellipse(canvas, (int(tip[0]), int(tip[1])), (16, 16), 0,
+                                -90, -90 + int(360 * pausa), GOLD, 3, cv2.LINE_AA)
 
         # ---- HUD ----
         if shape and g.flash <= 0:
