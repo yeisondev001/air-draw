@@ -394,7 +394,12 @@ def main():
             else:
                 g.pending, g.hold = gesture, 0
 
-            tip = (fx.filter(lm[8].x * W, now), fy.filter(lm[8].y * H, now))
+            # Comprimir el area de dibujo a la zona donde la camara lee bien.
+        # La webcam pierde tracking en los bordes: mapeamos [0.22, 0.82] -> [0, H]
+        # para que tu mano pueda moverse tranquila en el medio.
+        y_min, y_max = 0.22, 0.82
+        y_norm = max(0.0, min(1.0, (lm[8].y - y_min) / (y_max - y_min)))
+        tip = (fx.filter(lm[8].x * W, now), fy.filter(y_norm * H, now))
 
             for a, b in BONES:
                 cv2.line(canvas,

@@ -426,7 +426,12 @@ function loop(t) {
     // Histéresis: 3 frames seguidos antes de cambiar de gesto.
     if (g === pending) { if (++hold >= 3) mode = g; } else { pending = g; hold = 0; }
 
-    tip = { x: (1 - lm[8].x) * W, y: lm[8].y * H };
+    // Comprimir el area de dibujo a la zona donde la camara lee bien.
+    // La webcam pierde tracking en los bordes: mapeamos [0.22, 0.82] -> [0, H]
+    // para que tu mano pueda moverse tranquila en el medio.
+    const yMin = 0.22, yMax = 0.82;
+    const yNorm = Math.max(0, Math.min(1, (lm[8].y - yMin) / (yMax - yMin)));
+    tip = { x: (1 - lm[8].x) * W, y: yNorm * H };
     tip.x = fx.filter(tip.x, t); tip.y = fy.filter(tip.y, t);
 
     ctx.strokeStyle = "rgba(96,165,250,.40)"; ctx.lineWidth = 2;
