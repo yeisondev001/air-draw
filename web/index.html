@@ -29,7 +29,7 @@
   }
   h1{font-size:19px;margin:0 0 2px;font-weight:700;letter-spacing:-.2px;text-align:center}
   .sub{color:var(--muted);font-size:13px;margin:0 0 14px;text-align:center}
-  .wrap{display:grid;grid-template-columns:minmax(0,1fr) 258px;gap:16px;max-width:940px;margin:0 auto}
+  .wrap{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:18px;max-width:1280px;margin:0 auto}
   @media(max-width:780px){ .wrap{grid-template-columns:1fr} }
 
   #stage{
@@ -40,7 +40,7 @@
      que ocupan título, HUD, error y ayuda (~285px). En móvil se permite
      scrollear porque la vista es vertical. */
   @media(min-width:781px){
-    #stage{max-width:min(100%,calc((100vh - 165px)*4/3))}
+    #stage{max-width:min(100%,calc((100vh - 140px)*4/3))}
   }
   canvas{width:100%;height:100%;display:block;border-radius:13px;background:#000;border:1px solid var(--line)}
   .screen{
@@ -106,7 +106,7 @@
   .empty{color:var(--muted);font-size:12.5px;margin:0}
   .note{color:var(--gold);font-size:11.5px;margin:10px 0 0;line-height:1.4}
   .note.hidden{display:none}
-  .hint{color:var(--muted);font-size:12px;margin:8px auto 0;max-width:940px;text-align:center}
+  .hint{color:var(--muted);font-size:12px;margin:8px auto 0;max-width:1280px;text-align:center}
   #err{color:var(--red);font-size:13px;text-align:center;min-height:16px;margin:8px 0 0}
 </style>
 </head>
