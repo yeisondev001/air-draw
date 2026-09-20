@@ -6,6 +6,7 @@
 
 [![CI](https://github.com/yeisondev001/air-draw/actions/workflows/ci.yml/badge.svg)](https://github.com/yeisondev001/air-draw/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![JavaScript](https://img.shields.io/badge/javascript-ES%202022-F7DF1E?logo=javascript&logoColor=black)](https://developer.mozilla.org/es/docs/Web/JavaScript)
 [![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-4ade80.svg)](LICENSE)
 
 **[🎮 Jugar en el navegador](https://air-draw-zeta.vercel.app)**
@@ -15,6 +16,11 @@
 ---
 
 Un mini juego de **visión por computadora**: te muestra una figura y la dibujas **en el aire con el dedo**. El sistema detecta tu mano con la cámara, sigue la punta del índice y compara tu trazo contra la figura para darte un puntaje de **0 a 100**.
+
+Hay **dos versiones del mismo juego**:
+
+- 🖥️ **Escritorio** — `air_draw.py`, con **Python + OpenCV + MediaPipe**
+- 🌐 **Navegador** — `web/`, con **JavaScript + Canvas + MediaPipe WASM** (la jugable en línea, arriba)
 
 Lo interesante: **no hay ningún modelo entrenado para puntuar**. La flor es una curva matemática y la comparación es geometría pura.
 
@@ -94,6 +100,8 @@ El motor (`web/scoring.js`) es JavaScript puro y compartido entre cliente y serv
 
 ## 📦 Instalación
 
+### Versión escritorio (Python)
+
 **1. Entorno virtual**
 
 ```bash
@@ -123,6 +131,17 @@ python air_draw.py
 ```
 
 El modelo de MediaPipe (~7.5 MB) se descarga solo la primera vez.
+
+### Versión web (JavaScript)
+
+No necesita instalación: [**juega en línea**](https://air-draw-zeta.vercel.app). Para correrla local:
+
+```bash
+cd web
+python -m http.server 8000    # o cualquier servidor estático
+```
+
+y abrí `http://localhost:8000/index.html` (los módulos ES no cargan por `file://`). El ranking global necesita las credenciales de Vercel/Upstash; sin ellas, todo lo demás funciona.
 
 ---
 
