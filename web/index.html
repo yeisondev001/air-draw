@@ -302,6 +302,46 @@ const AUTO_MS = 1000;                // pausa que activa el cierre
 const MIN_LEN = 170;                 // misma longitud mínima que el motor
 
 const strokeLen = a => { let l = 0; for (let i = 1; i < a.length; i++) l += dist(a[i - 1], a[i]); return l; };
+
+/* Sonidos del puntaje: se generan con Web Audio, sin archivos de audio.
+   Verde (≥70): arpegio ascendente de acierto. Amarillo (40-69): tono neutral.
+   Rojo (<40): nota baja. El AudioContext nace al primer toque (requisito del
+   navegador) y como el juego arranca con un click, ya hay gesto de usuario. */
+let audioCtx = null;
+function beep(freq, t0, dur, type = "sine", gain = 0.15) {
+  const a = audioCtx || (audioCtx = new (window.AudioContext || window.webkitAudioContext)());
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.value = freq;
+  o.connect(g); g.connect(a.destination);
+  const t = a.currentTime + t0;
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(gain, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+function playScoreSound(sc) {
+  try {
+    if (sc >= 70)       { beep(523, 0, .12); beep(659, .10, .12); beep(784, .20, .28); } // verde
+    else if (sc >= 40)  { beep(440, 0, .25, "triangle"); }                              // amarillo
+    else                { beep(196, 0, .30, "sawtooth", .07); }                         // rojo
+  } catch {}
+}
+
+/* Sonido del trazo: un tono continuo que suena mientras dibujás y cuya
+   frecuencia sigue la velocidad del dedo (rápido = más agudo, como un lápiz).
+   Nace con el click de Jugar (gesto de usuario que el navegador exige). */
+let drawOsc = null, drawGain = null;
+function initAudio() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    drawOsc = audioCtx.createOscillator();
+    drawGain = audioCtx.createGain();
+    drawOsc.type = "triangle";
+    drawGain.gain.value = 0;
+    drawOsc.connect(drawGain); drawGain.connect(audioCtx.destination);
+    drawOsc.start();
+  } catch {}
+}
 let fpsT = performance.now(), fpsN = 0;
 
 const video = document.createElement("video");
@@ -437,7 +477,16 @@ function loop(t) {
   if (t >= lockUntil) {
     if (mode === "draw" && tip) {
       const last = stroke[stroke.length - 1];
-      if (!last || dist(tip, last) > 2.5) { stroke.push(tip); lastDrawT = t; }
+      const moved = !last || dist(tip, last) > 2.5;
+      if (moved) { stroke.push(tip); lastDrawT = t; }
+
+      // Tono de trazo: volumen arriba mientras el dedo se mueve, la
+      // frecuencia sube con la velocidad. En pausa, se apaga suave.
+      if (drawGain) {
+        const now = audioCtx.currentTime;
+        drawGain.gain.setTargetAtTime(moved ? 0.035 : 0.004, now, 0.06);
+        drawOsc.frequency.setTargetAtTime(160 + Math.min(dist(tip, last || tip) * 14, 380), now, 0.06);
+      }
 
       // Cuenta regresiva alrededor de la punta: cuando el anillo se completa,
       // el trazo se cierra solo (✌️ sigue como cierre manual).
@@ -448,6 +497,8 @@ function loop(t) {
         ctx.arc(tip.x, tip.y, 16, -Math.PI / 2, -Math.PI / 2 + pausa * TAU);
         ctx.stroke();
       }
+    } else if (drawGain) {
+      drawGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);   // no dibujando → silencio
     }
 
     // Cierre automático: con el dedo quieto (o la mano fuera del frame) por
@@ -463,6 +514,7 @@ function loop(t) {
       const r = scoreStroke(stroke, shape);
       if (r) {
         total += r.score; flashScore = r.score; flash = 1;
+        playScoreSound(r.score);
         setCard("cTotal", total);
         rounds.push({ shapeId: shape.id, points: r.normalized.map(p => [p.x, p.y]) });
         lastStroke = stroke; stroke = [];
@@ -606,6 +658,7 @@ $("btnPlay").addEventListener("click", async () => {
   $("err").textContent = "";
   try {
     if (!landmarker || !video.srcObject) await boot();
+    initAudio();   // el AudioContext necesita este gesto de usuario
     startGame();
     requestAnimationFrame(loop);
   } catch (e) {
