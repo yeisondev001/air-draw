@@ -39,7 +39,7 @@ def ensure_model() -> str:
         urllib.request.urlretrieve(MODEL_URL, MODEL)
         print("Listo.")
     return str(MODEL)
-W, H = 960, 720
+W, H = 640, 480   # 960x720 demoraba el landmarker: 10 fps en el equipo de prueba
 TAU = math.tau
 
 # Paleta BGR (OpenCV usa BGR, no RGB)
@@ -183,7 +183,7 @@ def score_stroke(stroke: List[tuple], shape: Shape) -> Optional[int]:
         return None
     pts = np.array(stroke, dtype=np.float64)
     length = float(np.linalg.norm(np.diff(pts, axis=0), axis=1).sum())
-    if length < 230:                       # trazo demasiado corto para contar
+    if length < 0.24 * W:                  # trazo demasiado corto para contar
         return None
     a = resample(pts, N, shape.closed)
     if a is None:
@@ -301,18 +301,33 @@ def text(img, s, org, scale, color, thick=2, center=False):
 
 
 def main():
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    # MSMF: el backend DSHOW limitaba la cámara a ~10 fps; MSMF da ~21.
+    cap = cv2.VideoCapture(0, cv2.CAP_MSMF)
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, W)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, H)
     if not cap.isOpened():
         raise SystemExit("No se pudo abrir la camara.")
 
-    options = vision.HandLandmarkerOptions(
-        base_options=mp_python.BaseOptions(model_asset_path=ensure_model()),
-        running_mode=vision.RunningMode.VIDEO,
-        num_hands=1,
-    )
-    landmarker = vision.HandLandmarker.create_from_options(options)
+    def make_landmarker(delegate):
+        """GPU acelera el inferencia ~3x; si el driver no banca, cae a CPU."""
+        return vision.HandLandmarker.create_from_options(
+            vision.HandLandmarkerOptions(
+                base_options=mp_python.BaseOptions(
+                    model_asset_path=ensure_model(), delegate=delegate),
+                running_mode=vision.RunningMode.VIDEO,
+                num_hands=1,
+                # Confianza mas baja que el default (0.5): el tracking
+                # aguanta mejor la luz floja y los movimientos rapidos.
+                min_hand_detection_confidence=0.35,
+                min_hand_presence_confidence=0.35,
+                min_tracking_confidence=0.35,
+            ))
+
+    try:
+        landmarker = make_landmarker(mp_python.BaseOptions.Delegate.GPU)
+    except Exception:
+        landmarker = make_landmarker(mp_python.BaseOptions.Delegate.CPU)
 
     fx, fy = OneEuro(), OneEuro()
     g = Game()

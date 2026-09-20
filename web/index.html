@@ -481,7 +481,12 @@ async function boot() {
   const fileset = await FilesetResolver.forVisionTasks(V + "/wasm");
   const make = delegate => HandLandmarker.createFromOptions(fileset, {
     baseOptions: { modelAssetPath: MODEL_URL, delegate },
-    runningMode: "VIDEO", numHands: 1
+    runningMode: "VIDEO", numHands: 1,
+    // Confianza más baja que el default (0.5): el tracking aguanta mejor
+    // la luz floja y los movimientos rápidos sin perder la mano.
+    minHandDetectionConfidence: 0.35,
+    minHandPresenceConfidence: 0.35,
+    minTrackingConfidence: 0.35,
   });
   try { landmarker = await make("GPU"); }
   catch { landmarker = await make("CPU"); }
