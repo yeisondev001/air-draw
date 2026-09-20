@@ -492,23 +492,27 @@ async function boot() {
     throw new Error("Este navegador no da acceso a la cámara. Probá con Chrome o Safari.");
   }
   st.textContent = "Pidiendo cámara…";
-  // Reintento: 'Timeout starting video source' suele ser transitorio (la
-  // cámara queda pegada un momento tras liberarse de otra app). Probamos
-  // 3 veces con una espera corta antes de rendirnos.
+  // Algunas laptops exponen la cámara duplicada (RGB + IR, o una virtual
+  // de un programa "celular como webcam"). Chrome elige la primera y se
+  // cuelga: probamos todas las reales hasta que alguna responda.
   const pedirCamara = async () => {
-    let video = { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" };
-    // laptops con utilidades traen cámaras fantasma: si ya nos dieron permiso
-    // podemos leer los nombres y elegir una real ("Integrated/Webcam"),
-    // descartando las virtuales que arrancan con timeout.
+    const base = { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" };
+    let devs = [];
     try {
-      const devs = (await navigator.mediaDevices.enumerateDevices())
+      devs = (await navigator.mediaDevices.enumerateDevices())
         .filter(d => d.kind === "videoinput" && d.label);
-      const real = devs => devs.find(d => /integrated|internal/i.test(d.label)) ||
-                           devs.find(d => /webcam|camera/i.test(d.label) && !/virtual|epson|many|droid|ir\b/i.test(d.label));
-      const elegida = real(devs);
-      if (elegida) video = { ...video, deviceId: { exact: elegida.deviceId } };
     } catch {}
-    return navigator.mediaDevices.getUserMedia({ video, audio: false });
+    const score = d => /virtual|many|droid|epson|general|ir\b/i.test(d.label) ? 2
+                      : /integrated|internal/i.test(d.label) ? 0 : 1;
+    const ordenadas = devs.sort((a, b) => score(a) - score(b));
+    for (const d of ordenadas) {
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          video: { ...base, deviceId: { exact: d.deviceId } }, audio: false
+        });
+      } catch {}
+    }
+    return navigator.mediaDevices.getUserMedia({ video: base, audio: false });
   };
   for (let intento = 1; ; intento++) {
     try {
