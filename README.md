@@ -36,7 +36,7 @@ La figura objetivo aparece punteada en pantalla como guía. Dibujas encima, cier
 | Gesto | Acción |
 |---|---|
 | ☝️ **Solo índice** | Dibujar |
-| ✌️ **Índice + medio** | Cerrar el trazo y puntuar |
+| **Dedo quieto 1 s** o ✌️ **índice + medio** | Cerrar el trazo y puntuar (el cierre es automático, con cuenta regresiva) |
 | 🖐️ **Palma abierta** | Borrar y reintentar la figura |
 | 👍 **Pulgar arriba** | Jugar de nuevo en la pantalla final |
 
