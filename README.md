@@ -1,223 +1,160 @@
 <div align="center">
 
-![Air Draw — dibuja en el aire con el dedo](docs/assets/banner.png)
+<img src="docs/assets/banner.png" alt="Air Draw" width="900" />
 
-# 🖐️ Air Draw
+# Air Draw
+
+**Juego de visión por computadora para dibujar figuras en el aire con la mano.**
 
 [![CI](https://github.com/yeisondev001/air-draw/actions/workflows/ci.yml/badge.svg)](https://github.com/yeisondev001/air-draw/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![JavaScript](https://img.shields.io/badge/javascript-ES%202022-F7DF1E?logo=javascript&logoColor=black)](https://developer.mozilla.org/es/docs/Web/JavaScript)
-[![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-4ade80.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![JavaScript](https://img.shields.io/badge/JavaScript-ES2022-F7DF1E?logo=javascript&logoColor=black)](https://developer.mozilla.org/es/docs/Web/JavaScript)
+[![License: MIT](https://img.shields.io/badge/License-MIT-4ade80.svg)](LICENSE)
 
-**[🎮 Jugar en el navegador](https://air-draw-zeta.vercel.app)**
+[Jugar en el navegador](https://air-draw-zeta.vercel.app) · [Ver arquitectura](#arquitectura) · [Instalación](#ejecución-local)
 
 </div>
 
 ---
 
-Un mini juego de **visión por computadora**: te muestra una figura y la dibujas **en el aire con el dedo**. El sistema detecta tu mano con la cámara, sigue la punta del índice y compara tu trazo contra la figura para darte un puntaje de **0 a 100**.
+## Resumen
 
-Hay **dos versiones del mismo juego**:
+Air Draw convierte la cámara en una superficie de interacción. El jugador dibuja una figura con la punta de su dedo índice y el sistema compara el trazo con una plantilla geométrica para calcular una puntuación de **0 a 100**.
 
-- 🖥️ **Escritorio** — `air_draw.py`, con **Python + OpenCV + MediaPipe**
-- 🌐 **Navegador** — `web/`, con **JavaScript + Canvas + MediaPipe WASM** (la jugable en línea, arriba)
+El proyecto incluye dos implementaciones del mismo concepto:
 
-Lo interesante: **no hay ningún modelo entrenado para puntuar**. La flor es una curva matemática y la comparación es geometría pura.
+| Versión | Tecnología | Uso |
+| --- | --- | --- |
+| Web | JavaScript, Canvas y MediaPipe WASM | Disponible en navegador, escritorio y móvil |
+| Escritorio | Python, OpenCV y MediaPipe | Ejecución local con cámara web |
 
-Funciona desde el celular (Android e iOS) y desde la computadora. No hay que instalar nada, y **la cámara se procesa en tu dispositivo** — ningún frame se envía a ningún servidor.
+La detección de cámara se procesa en el dispositivo. Ningún frame de video se envía a un servidor.
 
-![Demo](docs/assets/demo.gif)
+## Demo
 
----
+<div align="center">
+  <img src="docs/assets/demo.gif" alt="Demostración de Air Draw: detección de mano y trazado de figuras" width="320" />
+  <br />
+  <sub>Detección de mano, trazado en tiempo real y puntuación de círculo, triángulo, cuadrado, espiral y flor.</sub>
+</div>
 
-## 🎯 Cómo se juega
+## Experiencia de juego
 
-Cinco figuras, siempre las mismas y en el mismo orden (para que los puntajes sean comparables):
+Air Draw presenta cinco figuras en un orden fijo para que los resultados sean comparables:
 
-⭕ Círculo → 🔺 Triángulo → ⬜ Cuadrado → 🌀 Espiral → 🌸 Flor
-
-La figura objetivo aparece punteada en pantalla como guía. Dibujas encima, cierras el trazo, y te puntúa.
+**Círculo → Triángulo → Cuadrado → Espiral → Flor**
 
 | Gesto | Acción |
-|---|---|
-| ☝️ **Solo índice** | Dibujar |
-| **Dedo quieto 1 s** o ✌️ **índice + medio** | Cerrar el trazo y puntuar (el cierre es automático, con cuenta regresiva) |
-| 🖐️ **Palma abierta** | Borrar y reintentar la figura |
-| 👍 **Pulgar arriba** | Jugar de nuevo en la pantalla final |
+| --- | --- |
+| Solo índice | Dibujar |
+| Dedo quieto durante 1 segundo o índice + medio | Cerrar el trazo y calcular la puntuación |
+| Palma abierta | Borrar y volver a intentar |
+| Pulgar arriba | Iniciar una nueva partida al terminar |
 
-**Teclas:** `R` reinicia la partida · `Q` sale.
+Atajos de la versión de escritorio: `R` reinicia la partida y `Q` cierra la aplicación.
 
----
+## Funcionamiento
 
-## 🗺️ Flujo de la aplicación
+La solución no utiliza un modelo entrenado para puntuar. La evaluación combina visión por computadora con geometría determinista:
 
-```mermaid
-flowchart TD
-    A[👋 Abrir la app] --> B{¿Dónde?}
-    B -->|Navegador| C[Escribir nick · entrar]
-    B -->|Escritorio| C
-    C --> D[Cámara activa · 21 landmarks por frame]
-    D --> E{Clasificador de gesto}
-    E -->|☝️ solo índice| F[✏️ Dibujar · punta filtrada]
-    E -->|🖐️ palma abierta| G[🧹 Borrar trazo]
-    E -->|✌️ índice + medio<br/>o dedo quieto 1 s| H[✔️ Cerrar trazo]
-    F --> E
-    G --> F
-    H --> I[Puntuación: geometría contra la plantilla]
-    I --> J[Puntaje 0-100 + sonido]
-    J --> K{¿Quedan figuras?}
-    K -->|sí · figura 2 a 5| E
-    K -->|no| L[🏆 Pantalla final · ranking]
-    L --> M[📸 Tarjeta con el puntaje para compartir]
-    L -->|👍 pulgar arriba sostenido| E
-```
+1. **MediaPipe Hands** identifica los 21 landmarks de la mano.
+2. La punta del índice (`landmark 8`) se usa como cursor.
+3. Un **One-Euro Filter** suaviza el trazo sin introducir latencia perceptible.
+4. El trazo se remuestrea y normaliza a una cantidad fija de puntos.
+5. Se compara contra la plantilla con distancia punto a punto y curvatura.
+6. El resultado se traduce a una puntuación de 0 a 100.
 
----
+<div align="center">
+  <img src="docs/assets/hand-landmarks.png" alt="Los 21 landmarks detectados por MediaPipe Hands" width="620" />
+</div>
 
-## 🧠 Cómo funciona
-
-```mermaid
-flowchart TD
-    A[cámara] --> B[MediaPipe Hands<br/>21 landmarks de la mano]
-    B --> C[clasificador de gesto<br/>geometría entre landmarks · sin ML]
-    C --> D[punta del índice]
-    D --> E[One-Euro Filter<br/>trazo suave sin lag]
-    E --> F[remuestrear → normalizar<br/>→ comparar con la plantilla]
-    F --> G[puntaje 0-100]
-```
-
-El modelo entrega **21 landmarks por mano**: un punto `(x, y, z)` por cada articulación, en tiempo real.
-
-![Los 21 landmarks de MediaPipe: numerados, con nombre y conexiones](docs/assets/hand-landmarks.png)
-
-El juego vive de esos números: el cursor es la **punta del índice `8`**, los gestos son geometría entre puntos contra la **muñeca `0`** (invariante a la rotación), y MCP / PIP / DIP / TIP van del nudillo a la punta.
-
-**Tres decisiones del diseño:**
-
-| Decisión | Por qué |
-|---|---|
-| **One-Euro Filter** | los landmarks tiemblan: filtra fuerte al moverse lento, rápido al acelerar — suavidad sin lag |
-| **Histéresis de gestos** | 3 frames seguidos antes de activar un gesto: sin esto la detección parpadea y corta el trazo |
-| **Puntaje sin ML** | geometría tipo [$1 Unistroke](https://depts.washington.edu/acelab/proj/dollar/index.html): 64 puntos, normalización, distancia punto a punto + término de curvatura. Un círculo daba 77/100 como "triángulo"; con curvatura, ~51. Determinista, sin dataset |
-
----
-
-## 🛠️ Tecnologías
-
-Dos versiones del mismo juego, con el mismo motor de puntuación:
-
-### 🖥️ Escritorio — `air_draw.py`
-
-![Python](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)
-![MediaPipe](https://img.shields.io/badge/MediaPipe-Hand_Landmarker-0068FF)
-![OpenCV](https://img.shields.io/badge/OpenCV-captura_%26_render-5C3EE8?logo=opencv&logoColor=white)
-![NumPy](https://img.shields.io/badge/NumPy-comparaci%C3%B3n_vectorizada-013243?logo=numpy&logoColor=white)
-
-- **MediaPipe Tasks (Vision)** — modelo Hand Landmarker: 21 puntos por mano
-- **OpenCV** — captura de video y renderizado
-- **NumPy** — remuestreo y comparación vectorizada
-
-### 🌐 Web — `web/` · [▶ jugable en línea](https://air-draw-zeta.vercel.app)
-
-![JavaScript](https://img.shields.io/badge/JavaScript-ES2022-F7DF1E?logo=javascript&logoColor=black)
-![Canvas](https://img.shields.io/badge/Canvas-2D-222222)
-![MediaPipe WASM](https://img.shields.io/badge/MediaPipe-Task_Vision_WASM-0068FF)
-![Vercel](https://img.shields.io/badge/Vercel-hosting_%2B_serverless-000000?logo=vercel&logoColor=white)
-![Upstash Redis](https://img.shields.io/badge/Upstash-Redis_ranking-00E291?logo=redis&logoColor=white)
-
-- **JavaScript + Canvas** — sin framework: un solo HTML con el juego
-- **MediaPipe Tasks Vision (WASM)** — el mismo modelo corriendo en el navegador
-- **Vercel** — hosting + serverless function del ranking
-- **Upstash Redis** — ranking global (el servidor recalcula el puntaje: editar el score en devtools no sirve)
-
-**Motor compartido:** `web/scoring.js` es JavaScript puro, lo usa el cliente para mostrar el puntaje y el servidor para recalcularlo antes de guardar — y tiene tests (`node --test tests/`, corren en el CI).
-
-![Node.js](https://img.shields.io/badge/Node.js-tests-en%20CI-339933?logo=nodedotjs&logoColor=white)
-
----
-
-## 🏗️ Arquitectura
-
-Dos versiones, el mismo motor de puntuación. La privacidad está en el diseño: la cámara vive en el cliente, **ningún frame de video viaja a ningún servidor** — lo único que viaja es el puntaje, y aun así el servidor lo recalcula para no fiarse del cliente.
+## Arquitectura
 
 ```mermaid
 flowchart LR
-    subgraph WEB [🌐 Navegador — todo el vision corre local]
-        CAM[Cámara] -->|frames| MP[MediaPipe Hand Landmarker<br/>WASM]
-        MP -->|21 landmarks| JUEGO[index.html<br/>gestos · trazo · render Canvas]
-        JUEGO --> MOTOR[scoring.js<br/>puntaje 0-100]
-    end
+    CAM[Cámara] --> MP[MediaPipe Hand Landmarker]
+    MP --> GESTOS[Clasificador de gestos]
+    GESTOS --> PUNTA[Punta del índice]
+    PUNTA --> FILTRO[One-Euro Filter]
+    FILTRO --> TRAZO[Remuestreo y normalización]
+    TRAZO --> SCORE[Comparación geométrica]
+    SCORE --> UI[Puntuación y experiencia de juego]
 
-    subgraph NUBE [☁️ Solo el ranking]
-        MOTOR -->|POST /api/scores<br/>nick + puntos normalizados| API[api/scores.js<br/>Vercel serverless]
-        API -->|re-puntúa con<br/>el mismo scoring.js| RDB[(Upstash Redis<br/>ranking global)]
-        API -->|rank · récords| JUEGO
-    end
-
-    subgraph ESCRITORIO [🖥️ Python — sin servidores]
-        CAM2[Cámara] --> CV[OpenCV · captura y render]
-        CV --> MPY[MediaPipe Tasks Python]
-        MPY --> PY[scoring NumPy · misma geometría]
+    subgraph Web
+      UI --> API[API serverless]
+      API --> VALIDACION[Recalcula la puntuación]
+      VALIDACION --> REDIS[(Ranking global)]
     end
 ```
 
----
+En la versión web, el ranking es el único componente remoto. El servidor vuelve a calcular el puntaje antes de guardarlo para evitar que el cliente envíe resultados alterados.
 
-## 📦 Instalación
+## Tecnologías
 
-### Versión escritorio (Python)
+| Área | Herramientas |
+| --- | --- |
+| Visión por computadora | MediaPipe Hands / Hand Landmarker |
+| Aplicación de escritorio | Python, OpenCV, NumPy |
+| Aplicación web | JavaScript ES2022, Canvas 2D, MediaPipe WASM |
+| Puntuación | Remuestreo, normalización, distancia geométrica y curvatura |
+| Infraestructura web | Vercel Serverless Functions y Upstash Redis |
+| Calidad | Node.js Test Runner y GitHub Actions |
 
-**1. Entorno virtual**
+## Ejecución local
+
+### Aplicación de escritorio
 
 ```bash
+git clone https://github.com/yeisondev001/air-draw.git
+cd air-draw
 python -m venv venv
 ```
 
-Windows:
-```bash
-.\venv\Scripts\activate
-```
+Activa el entorno virtual:
 
-macOS / Linux:
 ```bash
+# Windows
+.\venv\Scripts\activate
+
+# macOS / Linux
 source venv/bin/activate
 ```
 
-**2. Dependencias**
+Instala las dependencias y ejecuta la aplicación:
 
 ```bash
 pip install -r requirements.txt
-```
-
-**3. Ejecutar**
-
-```bash
 python air_draw.py
 ```
 
-El modelo de MediaPipe (~7.5 MB) se descarga solo la primera vez.
+MediaPipe descarga el modelo requerido en la primera ejecución.
 
-### Versión web (JavaScript)
+### Aplicación web
 
-No necesita instalación: [**juega en línea**](https://air-draw-zeta.vercel.app). Para correrla local:
+La versión publicada está disponible en [air-draw-zeta.vercel.app](https://air-draw-zeta.vercel.app).
+
+Para ejecutarla de forma local utiliza un servidor estático:
 
 ```bash
 cd web
-python -m http.server 8000    # o cualquier servidor estático
+python -m http.server 8000
 ```
 
-y abrí `http://localhost:8000/index.html` (los módulos ES no cargan por `file://`). El ranking global necesita las credenciales de Vercel/Upstash; sin ellas, todo lo demás funciona.
+Abre `http://localhost:8000/index.html`. No uses `file://`, porque los módulos ES requieren un servidor local.
 
----
+## Pruebas
 
-## 💡 Notas
+```bash
+node --test tests/
+```
 
-- Aléjate de la cámara lo suficiente para que quepa el brazo; los trazos muy pequeños no puntúan.
-- Buena luz ayuda bastante a la detección.
-- Requiere una cámara web. Se probó en Windows con Python 3.12.
+## Privacidad y requisitos
 
----
+- Se requiere permiso para acceder a la cámara.
+- Una buena iluminación y mantener el brazo completo dentro del encuadre mejora la detección.
+- El procesamiento de la cámara ocurre localmente en el dispositivo.
+- La versión web solo transmite los datos necesarios para validar y publicar un puntaje en el ranking.
 
-## 📄 Licencia
+## Licencia
 
-MIT — ver [LICENSE](LICENSE).
+Distribuido bajo la licencia [MIT](LICENSE).
